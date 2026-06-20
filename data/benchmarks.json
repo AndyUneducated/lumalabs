@@ -1,0 +1,22 @@
+[
+  {
+    "id": "stripe",
+    "url": "https://stripe.com",
+    "note": "Complex SaaS landing page: gradients, layered components, strong brand color"
+  },
+  {
+    "id": "linear",
+    "url": "https://linear.app",
+    "note": "Minimal dark/light style, clear type rhythm"
+  },
+  {
+    "id": "vercel",
+    "url": "https://vercel.com",
+    "note": "Developer product landing page, strong black and white contrast"
+  },
+  {
+    "id": "resend",
+    "url": "https://resend.com",
+    "note": "YC-style modern marketing site, medium complexity for regression"
+  }
+]

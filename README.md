@@ -74,7 +74,7 @@ We should be able to paste a URL and get a usable template, and be able to refin
 
 ### 3. Video walkthrough
 
-Record a short video (\~5 minutes) showing what you built. Demo the key flows — paste a URL, show the agent working, refine the result through conversation — explain your decisions, and highlight anything you're particularly proud of. This is your chance to show us the experience through your eyes.
+Record a short video (~5 minutes) showing what you built. Demo the key flows — paste a URL, show the agent working, refine the result through conversation — explain your decisions, and highlight anything you're particularly proud of. This is your chance to show us the experience through your eyes.
 
 **Paste your video link (Loom, Google Drive, YouTube, etc.) into** `video.md`**.**
 
@@ -100,7 +100,7 @@ We'll reimburse up to $100 total. Don't commit secrets — use `.env`.
 
 ### ⏱️ Time
 
-\~8 hours. No strict deadline, but typically within 2–3 days.
+~8 hours. No strict deadline, but typically within 2–3 days.
 
 ### 🤙🏽 Questions
 

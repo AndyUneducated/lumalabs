@@ -6,6 +6,8 @@ Serves the viewer, hosts the HTML preview, and runs the agent.
 import asyncio
 import json
 import os
+import shutil
+import sys
 from pathlib import Path
 
 os.environ.pop("CLAUDECODE", None)
@@ -28,6 +30,36 @@ _version = 0
 OUTPUT_DIR = Path("output")
 OUTPUT_FILE = OUTPUT_DIR / "index.html"
 SESSIONS_DIR = Path.home() / ".claude" / "projects"
+AGENT_MODEL = os.environ.get("AGENT_MODEL", "opus")
+
+
+def _detect_claude_transport() -> str:
+    """Report which Claude Code CLI the SDK is likely to use (no secrets)."""
+    if cli := shutil.which("claude"):
+        return f"claude CLI at {cli}"
+    try:
+        import claude_agent_sdk
+
+        bundled = (
+            Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude"
+        )
+        if bundled.is_file():
+            return f"bundled CLI at {bundled}"
+    except ImportError:
+        pass
+    return "claude CLI not found in PATH (SDK may fail until installed)"
+
+
+def _startup_selfcheck() -> None:
+    """Print runtime config to stderr; never log secrets."""
+    env_file = Path(".env")
+    print("[startup] AGENT_MODEL:", AGENT_MODEL, file=sys.stderr)
+    print("[startup] transport:", _detect_claude_transport(), file=sys.stderr)
+    print(
+        "[startup] .env file:",
+        "present" if env_file.is_file() else "not found",
+        file=sys.stderr,
+    )
 
 
 def _get_session_dir() -> Path | None:
@@ -56,6 +88,7 @@ async def lifespan(app: FastAPI):
     from tools import set_notify_fn
     set_notify_fn(_notify)
     _load_sessions()
+    _startup_selfcheck()
     yield
 
 
@@ -144,7 +177,7 @@ def _build_agent_options(resume_session: str | None = None):
     return ClaudeAgentOptions(
         system_prompt=SYSTEM_PROMPT,
         permission_mode="acceptEdits",
-        model="haiku",
+        model=AGENT_MODEL,
         mcp_servers={SERVER_NAME: cs},
         allowed_tools=mcp_tool_names + ["WebFetch", "WebSearch"],
         disallowed_tools=[
