@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Builder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex; flex-direction: column; height: 100vh;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #fafaf9; color: #1c1917;
+  }
+
+  /* Landing state */
+  #landing {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px;
+  }
+  #landing h1 { font-size: 22px; font-weight: 600; color: #1c1917; }
+  #landing p { font-size: 14px; color: #a8a29e; max-width: 400px; text-align: center; line-height: 1.5; }
+  #url-form { display: flex; gap: 8px; width: 100%; max-width: 500px; }
+  #url-input {
+    flex: 1; padding: 10px 14px; border: 1px solid #e7e5e4; border-radius: 8px;
+    font-size: 14px; outline: none; font-family: inherit;
+  }
+  #url-input:focus { border-color: #2563eb; }
+  #url-submit {
+    padding: 10px 20px; background: #1c1917; color: #fff; border: none;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
+  }
+  #url-submit:hover { opacity: 0.85; }
+
+  /* Builder state */
+  #builder { display: none; flex-direction: column; height: 100vh; }
+  #builder.active { display: flex; }
+  #landing.hidden { display: none; }
+
+  #preview { flex: 1; border: none; width: 100%; background: #fff; }
+
+  #divider {
+    height: 6px; cursor: row-resize; background: #e7e5e4; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  #divider:hover, #divider.active { background: #2563eb55; }
+
+  #chat {
+    height: 220px; min-height: 100px; max-height: 60vh;
+    display: flex; flex-direction: column; background: #fff;
+    border-top: 1px solid #e7e5e4;
+  }
+  #chat-messages {
+    flex: 1; overflow-y: auto; padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #chat-messages::-webkit-scrollbar { width: 4px; }
+  #chat-messages::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 2px; }
+
+  .chat-msg {
+    font-size: 13px; line-height: 1.5; padding: 8px 12px; border-radius: 8px;
+    max-width: 85%; word-wrap: break-word; white-space: pre-wrap;
+  }
+  .chat-msg.user { background: #1c1917; color: #fff; align-self: flex-end; border-radius: 8px 8px 2px 8px; }
+  .chat-msg.assistant { background: #f5f5f4; color: #1c1917; align-self: flex-start; border-radius: 8px 8px 8px 2px; }
+  .chat-msg.thinking { background: #f5f5f4; color: #a8a29e; align-self: flex-start; font-style: italic; }
+
+  #chat-input-area {
+    display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid #e7e5e4;
+  }
+  #chat-input {
+    flex: 1; padding: 8px 12px; border: 1px solid #e7e5e4; border-radius: 8px;
+    font-size: 13px; outline: none; font-family: inherit;
+  }
+  #chat-input:focus { border-color: #2563eb; }
+  #chat-input:disabled { background: #f5f5f4; color: #a8a29e; }
+  #chat-send {
+    padding: 8px 16px; background: #1c1917; color: #fff; border: none;
+    border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500;
+  }
+  #chat-send:hover { opacity: 0.85; }
+  #chat-send:disabled { opacity: 0.4; cursor: default; }
+  #chat-reset {
+    padding: 8px 12px; background: transparent; color: #a8a29e; border: 1px solid #e7e5e4;
+    border-radius: 8px; cursor: pointer; font-size: 12px;
+  }
+  #chat-reset:hover { color: #1c1917; border-color: #d6d3d1; }
+
+  /* Sessions list */
+  #sessions { font-size: 13px; }
+  #sessions h3 { font-size: 11px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .session-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border: 1px solid #e7e5e4; border-radius: 6px; margin-bottom: 4px;
+    cursor: pointer; transition: border-color 0.12s;
+  }
+  .session-item:hover { border-color: #2563eb; }
+  .session-url { flex: 1; color: #1c1917; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-id { color: #a8a29e; font-size: 11px; font-family: monospace; }
+  #reset-all-btn {
+    margin-top: 8px; padding: 6px 12px; background: transparent; color: #a8a29e;
+    border: 1px solid #e7e5e4; border-radius: 6px; cursor: pointer; font-size: 11px;
+  }
+  #reset-all-btn:hover { color: #dc2626; border-color: #dc2626; }
+</style>
+</head>
+<body>
+
+<!-- Landing: URL input -->
+<div id="landing">
+  <h1>Website Template Builder</h1>
+  <p>Paste the URL of a website you love. We'll create a customizable template from it.</p>
+  <form id="url-form">
+    <input id="url-input" type="text" placeholder="stripe.com" required>
+    <button id="url-submit" type="submit">Go</button>
+  </form>
+  <div id="sessions" style="margin-top:24px;width:100%;max-width:500px;"></div>
+</div>
+
+<!-- Builder: preview + chat -->
+<div id="builder">
+  <iframe id="preview" src="/preview"></iframe>
+  <div id="divider"></div>
+  <div id="chat">
+    <div id="chat-messages"></div>
+    <div id="chat-input-area">
+      <input id="chat-input" type="text" placeholder="Give feedback or ask for changes..." autocomplete="off">
+      <button id="chat-send">Send</button>
+      <button id="chat-reset" onclick="resetAll()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const preview = document.getElementById('preview');
+const landing = document.getElementById('landing');
+const builder = document.getElementById('builder');
+
+// --- URL submission → enter builder mode ---
+let _targetUrl = null;
+
+document.getElementById('url-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  let url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  _targetUrl = url;
+  enterBuilder(`Create a template based on ${url}`);
+});
+
+function enterBuilder(initialMessage) {
+  landing.classList.add('hidden');
+  builder.classList.add('active');
+  if (initialMessage) sendChatMessage(initialMessage);
+}
+
+async function loadSessions() {
+  try {
+    const res = await fetch('/chat/sessions');
+    const data = await res.json();
+    const container = document.getElementById('sessions');
+    if (!data.sessions || data.sessions.length === 0) { container.innerHTML = ''; return; }
+    container.innerHTML = '<h3>Previous sessions</h3>';
+    for (const s of data.sessions) {
+      const item = document.createElement('div');
+      item.className = 'session-item';
+      item.onclick = () => { location.hash = s.id; location.reload(); };
+      const urlSpan = document.createElement('span');
+      urlSpan.className = 'session-url';
+      urlSpan.textContent = s.url || 'Unknown';
+      const idSpan = document.createElement('span');
+      idSpan.className = 'session-id';
+      idSpan.textContent = s.id.slice(0, 8);
+      item.appendChild(urlSpan);
+      item.appendChild(idSpan);
+      container.appendChild(item);
+    }
+    const btn = document.createElement('button');
+    btn.id = 'reset-all-btn';
+    btn.textContent = 'Clear all sessions';
+    btn.onclick = (e) => resetAllSessions(e);
+    container.appendChild(btn);
+  } catch {}
+}
+
+async function resetAllSessions(e) {
+  e.stopPropagation();
+  await fetch('/chat/reset-all', { method: 'POST' });
+  document.getElementById('sessions').innerHTML = '';
+}
+
+// --- Divider resize ---
+{
+  const divider = document.getElementById('divider');
+  const chat = document.getElementById('chat');
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;cursor:row-resize;display:none;';
+  document.body.appendChild(overlay);
+
+  divider.addEventListener('mousedown', (e) => {
+    divider.classList.add('active');
+    overlay.style.display = 'block';
+    e.preventDefault();
+  });
+  overlay.addEventListener('mousemove', (e) => {
+    const h = window.innerHeight - e.clientY - 3;
+    chat.style.height = Math.max(100, Math.min(window.innerHeight * 0.6, h)) + 'px';
+  });
+  overlay.addEventListener('mouseup', () => {
+    divider.classList.remove('active');
+    overlay.style.display = 'none';
+  });
+}
+
+// --- SSE ---
+function connectSSE() {
+  const es = new EventSource('/events');
+  es.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.event === 'chat') {
+      if (window.handleChatEvent) window.handleChatEvent(data.chat);
+    } else if (data.event === 'html_updated') {
+      preview.src = '/preview?' + Date.now();
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    setTimeout(connectSSE, 2000);
+  };
+}
+
+// --- Chat ---
+{
+  const input = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send');
+  const messages = document.getElementById('chat-messages');
+  let chatBusy = false;
+  let thinkingEl = null;
+  let assistantEl = null;
+  let assistantText = '';
+
+  function addMessage(text, role) {
+    const div = document.createElement('div');
+    div.className = `chat-msg ${role}`;
+    div.textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  window.handleChatEvent = function(data) {
+    if (data.type === 'text' || data.type === 'result') {
+      if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
+      if (!assistantEl) {
+        assistantEl = addMessage('', 'assistant');
+        assistantText = '';
+      }
+      assistantText += data.text + '\n';
+      assistantEl.textContent = assistantText.trim();
+      messages.scrollTop = messages.scrollHeight;
+    } else if (data.type === 'session') {
+      // Store session ID in URL hash
+      window._sessionId = data.session_id;
+      history.replaceState(null, '', '#' + data.session_id);
+    } else if (data.type === 'error') {
+      if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
+      addMessage('Error: ' + data.text, 'assistant');
+      chatBusy = false; input.disabled = false; sendBtn.disabled = false;
+    } else if (data.type === 'done') {
+      if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
+      chatBusy = false; input.disabled = false; sendBtn.disabled = false;
+      assistantEl = null; assistantText = '';
+      input.focus();
+    }
+  };
+
+  // Read session ID from URL hash
+  window._sessionId = location.hash.slice(1) || null;
+
+  // Shared send function — used by both URL submit and chat input
+  window.sendChatMessage = async function(text) {
+    if (!text || chatBusy) return;
+    addMessage(text, 'user');
+    chatBusy = true; input.disabled = true; sendBtn.disabled = true;
+    assistantEl = null; assistantText = '';
+    thinkingEl = addMessage('Thinking...', 'thinking');
+    try {
+      await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, url: _targetUrl, session_id: window._sessionId }),
+      });
+    } catch (err) {
+      if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
+      addMessage('Connection error: ' + err.message, 'assistant');
+      chatBusy = false; input.disabled = false; sendBtn.disabled = false;
+    }
+  };
+
+  window.resetChatState = function() {
+    chatBusy = false;
+    input.disabled = false;
+    sendBtn.disabled = false;
+    if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
+    thinkingEl = null; assistantEl = null; assistantText = '';
+  };
+
+  sendBtn.addEventListener('click', () => {
+    const text = input.value.trim();
+    if (text) { input.value = ''; sendChatMessage(text); }
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (text) { input.value = ''; sendChatMessage(text); }
+    }
+  });
+}
+
+// --- Reset ---
+async function resetAll() {
+  await fetch('/chat/reset', { method: 'POST' }).catch(() => {});
+  document.getElementById('chat-messages').innerHTML = '';
+  if (window.resetChatState) window.resetChatState();
+  window._sessionId = null;
+  _targetUrl = null;
+  history.replaceState(null, '', location.pathname);
+  preview.src = '/preview?' + Date.now();
+  builder.classList.remove('active');
+  landing.classList.remove('hidden');
+  document.getElementById('url-input').value = '';
+  loadSessions();
+}
+
+// --- Init ---
+connectSSE();
+{
+  const sessionId = location.hash.slice(1) || null;
+  if (!sessionId) loadSessions();
+
+  if (sessionId) {
+    landing.classList.add('hidden');
+    builder.classList.add('active');
+
+    // Load chat history from server JSONL
+    fetch(`/chat/history/${sessionId}`).then(r => r.json()).then(data => {
+      const chatBlock = document.getElementById('chat-messages');
+      for (const m of data.messages || []) {
+        const div = document.createElement('div');
+        div.className = `chat-msg ${m.role}`;
+        div.textContent = m.text;
+        chatBlock.appendChild(div);
+      }
+      chatBlock.scrollTop = chatBlock.scrollHeight;
+    }).catch(() => {});
+
+    // Check if agent is currently busy
+    fetch('/chat/status').then(r => r.json()).then(data => {
+      if (data.busy) {
+        const input = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('chat-send');
+        input.disabled = true; sendBtn.disabled = true;
+        const msgs = document.getElementById('chat-messages');
+        const div = document.createElement('div');
+        div.className = 'chat-msg thinking';
+        div.textContent = 'Thinking...';
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }).catch(() => {});
+  }
+}
+</script>
+</body>
+</html>

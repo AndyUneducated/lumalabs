@@ -1,0 +1,11 @@
+.env
+.take-home-token
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+output/
+data/.session_id
