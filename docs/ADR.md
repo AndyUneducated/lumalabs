@@ -44,7 +44,7 @@ The starter uses `ClaudeSDKClient` from `claude-agent-sdk`. By default it uses `
 ### Consequences and risks
 
 - **Impact**: `server.py` keeps `ClaudeSDKClient`. Auth issues mean checking the CLI, not only `.env`.
-- **Risk**: CI or deploy has no CLI → Phase 6 needs docs or an image with the CLI pre-installed.
+- **Risk**: CI or deploy has no CLI → Phase 7 needs docs or an image with the CLI pre-installed.
 
 ---
 
@@ -161,7 +161,7 @@ Track the file in git (`data/` exists; only `data/.session_id` is gitignored).
 ### Rationale
 
 - Same folder as `data/sessions.json`, fits project data layout.
-- Humans can read it; scripts can `json.load`; Phase 4 batch runs can reuse it.
+- Humans can read it; scripts can `json.load`; Phase 5 batch runs can reuse it.
 - Stable `id` helps reports and links into this file.
 
 ### Alternatives

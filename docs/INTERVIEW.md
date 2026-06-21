@@ -93,7 +93,7 @@ How do we prove this phase’s definition of done?
 
 - Playwright screenshots, design-token tools, big UI rewrites.
 - Structured agent progress over SSE (Phase 1).
-- Auto batch test scripts (Phase 4).
+- Auto batch test scripts (Phase 5).
 
 ### Likely follow-up questions
 

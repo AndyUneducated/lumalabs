@@ -6,12 +6,15 @@ Tool schemas are auto-generated from function signatures.
 To add a new tool: write an async function, add it to TOOL_HANDLERS.
 """
 
+import base64
 import inspect
 import json
 import re
 import types
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
+
+from browser import CaptureResult, capture_file, capture_url
 
 SERVER_NAME = "builder"
 
@@ -147,8 +150,98 @@ async def read_html() -> str:
     return ""
 
 
+def _normalize_tool_result(result: Any) -> dict:
+    """Pass through structured MCP content blocks or wrap plain text."""
+    if isinstance(result, dict) and "content" in result:
+        return result
+    if isinstance(result, list):
+        return {"content": result}
+    return {"content": [{"type": "text", "text": str(result)}]}
+
+
+def _paths_to_image_blocks(paths: list[Path]) -> list[dict]:
+    blocks = []
+    for path in paths:
+        data = base64.standard_b64encode(path.read_bytes()).decode("ascii")
+        blocks.append({"type": "image", "data": data, "mimeType": "image/png"})
+    return blocks
+
+
+def _capture_to_content(result: CaptureResult, label: str) -> dict:
+    """Build MCP tool result with text, optional styles JSON, and image blocks."""
+    content: list[dict] = []
+
+    if result.dom_only:
+        content.append(
+            {
+                "type": "text",
+                "text": (
+                    f"{label} — DOM-only fallback (screenshot failed).\n"
+                    f"Error: {result.error or 'unknown'}\n"
+                    "Use the style JSON and text outline below. Do not guess colors from memory."
+                ),
+            }
+        )
+    elif result.paths:
+        paths_str = ", ".join(str(p) for p in result.paths)
+        content.append(
+            {
+                "type": "text",
+                "text": (
+                    f"{label} — {len(result.paths)} screenshot tile(s), top to bottom.\n"
+                    f"Saved to: {paths_str}"
+                ),
+            }
+        )
+    else:
+        content.append({"type": "text", "text": f"{label} — no screenshots captured."})
+
+    if result.styles is not None:
+        content.append(
+            {
+                "type": "text",
+                "text": "Extracted styles (JSON):\n" + json.dumps(result.styles, indent=2),
+            }
+        )
+
+    content.extend(_paths_to_image_blocks(result.paths))
+    return {"content": content}
+
+
+async def capture_site(url: str):
+    """Capture a target website: tiled screenshots plus extracted design styles.
+
+    Call this first when the user gives a URL. Returns PNG image tiles the model
+    can see, plus a JSON summary of colors, fonts, and layout.
+
+    Args:
+        url: Public HTTP(S) URL of the site to copy
+    """
+    result = await capture_url(url)
+    return _capture_to_content(result, f"Screenshot of {result.source or url}")
+
+
+async def screenshot_output():
+    """Screenshot the current HTML preview (output/index.html) for self-check.
+
+    Call after write_html to compare your output against the target screenshot.
+    Returns PNG image tiles of the live preview.
+    """
+    result = await capture_file(OUTPUT_FILE)
+    if result.dom_only and result.error and "not found" in (result.error or "").lower():
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": "No output/index.html yet. Call write_html first, then screenshot_output.",
+                }
+            ]
+        }
+    return _capture_to_content(result, "Screenshot of current output (output/index.html)")
+
+
 # Registry — add new tool functions here
-TOOL_HANDLERS = [write_html, read_html]
+TOOL_HANDLERS = [write_html, read_html, capture_site, screenshot_output]
 TOOL_NAMES = [fn.__name__ for fn in TOOL_HANDLERS]
 
 
@@ -184,7 +277,7 @@ class WebsiteToolServer:
         async def handler(args: dict) -> dict:
             try:
                 result = await fn(**args)
-                return {"content": [{"type": "text", "text": str(result)}]}
+                return _normalize_tool_result(result)
             except Exception as e:
                 return {"content": [{"type": "text", "text": str(e)}], "isError": True}
         return handler

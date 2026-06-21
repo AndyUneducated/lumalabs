@@ -246,7 +246,7 @@ That maps well to APPROACH.md: what you built, tradeoffs, what you skipped on pu
 | APPROACH.md (what / tradeoffs / skipped / next) | Sections 1, 6, 9 feed APPROACH                                                                   |
 | Video (~5 min, `video.md`)                      | Demo script: URL → agent steps → chat → compare                                                  |
 | AI session history (`./submit.sh`)              | Run `./submit.sh` at submit time                                                                 |
-| Email extras: scalable API + public deploy      | Phase 6: Render/Fly; doc why screenshot service is separate, how to scale concurrency and quotas |
+| Email extras: scalable API + public deploy      | Phase 7: Render/Fly; doc why screenshot service is separate, how to scale concurrency and quotas |
 
 
 ---
@@ -254,11 +254,12 @@ That maps well to APPROACH.md: what you built, tradeoffs, what you skipped on pu
 ## 11. Suggested build order
 
 1. **Visual loop** (Playwright screenshots + self-check) — biggest single win; unlocks other work.
-2. **Design token extract → CSS variables** — makes “chat rebrand” real.
-3. **Small edit tools** — replace full-file rewrite; better multi-turn stability.
-4. **Preview/Code + side-by-side** — proves “clean” and “almost the same.”
-5. **Reliability** (scope control, accept/reject diff, rollback, errors, multi-site eval).
-6. (Optional) **Small-model fine-tuning** + **public deploy**.
+2. **Fidelity verification** (content + structure + layout/visual scores with thresholds) — turns "looks close" into measured, gateable numbers.
+3. **Design token extract → CSS variables** — makes “chat rebrand” real.
+4. **Small edit tools** — replace full-file rewrite; better multi-turn stability.
+5. **Preview/Code + side-by-side** — proves “clean” and “almost the same.”
+6. **Reliability** (scope control, accept/reject diff, rollback, errors, multi-site eval).
+7. (Optional) **Small-model fine-tuning** + **public deploy**.
 
 ---
 
@@ -271,7 +272,7 @@ Each Phase below uses the same four-part shape so it is easy to read and to defe
 3. **Technical approach** — diagrams + the small steps (`SX.Y`). Rule still holds: **one small change, 1–2 files when possible, easy to verify, app still runs.**
 4. **Test points / exit criteria** — how we prove the phase is done before we move on.
 
-Phases 0–3 are core. Phase 4 boosts score. Phases 5–6 are bonus.
+Phases 0–4 are core (baseline → visual → fidelity → tokens → small edits + compare UI). Phase 5 boosts score (reliability). Phases 6–7 are bonus (fine-tune + deploy).
 
 ---
 
@@ -353,7 +354,72 @@ flowchart TD
 
 ---
 
-### Phase 2 — Design tokens and customization
+### Phase 2 — Fidelity verification (content + layout diff)
+
+> Sits between Visual loop (Phase 1) and Design tokens (Phase 3). It turns the subjective "looks close?" from Phase 1 into **measured** scores, and **supersedes** the crude Phase 4 compare steps **S4.6** / **S4.7**.
+
+**Goal**: Score how close the output is to the source on three axes — **content** (text), **structure** (DOM skeleton), and **layout/visual** (geometry + pixels) — with clear pass/warn/fail thresholds the loop and a final gate can use.
+
+**Features / user stories**
+
+- As the agent, after I build a page I get a **fidelity report** that says *what* is wrong (e.g. "hero text missing", "footer 38% lower than source", "tile 2 SSIM 0.61"), not just "looks off".
+- As a user, the compare view shows a **score breakdown** (content / structure / layout / visual) plus a diff heatmap, not one vague number.
+- As a reviewer, a batch run prints a **per-site, per-axis** table so fidelity is provable, not anecdotal.
+
+**Why three axes (industry alignment)**
+
+- **Visual-only is fragile**: different text or one color shifts pixels a lot but may still be "the right page". Tools like Percy / Chromatic / Playwright `toHaveScreenshot` gate on a pixel-diff ratio; we add that but do not rely on it alone.
+- **Content + structure catch what pixels miss**: missing sections, wrong order, dropped copy. This mirrors how design-to-code pipelines (e.g. Builder.io) keep a structured representation instead of trusting one LLM glance.
+
+**Technical approach**
+
+```mermaid
+flowchart TD
+    subgraph capture [capture both sides]
+        SRC["target capture (cached per session)<br/>screenshot tiles + DOM"]
+        OUT["screenshot_output()<br/>+ output DOM"]
+    end
+    SRC --> EXTRACT
+    OUT --> EXTRACT
+    subgraph extract [compare.py extractors]
+        EXTRACT["normalize"] --> TXT["text: visible text, normalized"]
+        EXTRACT --> SKEL["structure: landmark/tag skeleton + section order"]
+        EXTRACT --> BOX["layout: section bounding boxes (normalized)"]
+        EXTRACT --> PIX["visual: aligned tiles"]
+    end
+    TXT --> MC["content score<br/>token/sequence diff"]
+    SKEL --> MS["structure score<br/>tree/sequence edit distance"]
+    BOX --> ML["layout score<br/>matched-block IoU"]
+    PIX --> MV["visual score<br/>SSIM + pHash per tile"]
+    MC --> REP
+    MS --> REP
+    ML --> REP
+    MV --> REP
+    REP["fidelity_report JSON<br/>weighted total + per-axis + worst sections"] --> GATE{thresholds}
+    GATE -- "below + < max iters" --> FIX["agent fixes named sections"]
+    GATE -- "pass" --> STOP([accept])
+    FIX --> OUT
+```
+
+- **S2.1 `compare.py` text metric**: Extract visible text from source and output DOM; normalize (collapse whitespace, trim). Report **text coverage** (share of source's meaningful text blocks present in output) and **order correlation**. Pure-Python, no new deps.
+- **S2.2 Structure skeleton metric**: Build a normalized sequence/tree of landmarks (`header/nav/main/section/footer/h1–h3/button/img/[data-section]`). Compare with sequence alignment or tree edit distance → **structural similarity** + exact landmark-order match flag.
+- **S2.3 Layout (geometry) metric**: From each DOM, read normalized bounding boxes of key sections (x/y/w/h ÷ viewport). Match source→output sections (by tag + order), compute **mean IoU** and per-section offset. This is layout fidelity that ignores color/text.
+- **S2.4 Visual metric (thresholded)**: Align tiles to the same 1280 width and tile height; compute **SSIM** per tile and a **pHash** Hamming distance; aggregate to a visual score and a per-tile diff. Deps: `Pillow` + `numpy` (optional `scikit-image` for SSIM; otherwise a small local SSIM).
+- **S2.5 `fidelity_report()` aggregator**: Weighted total (suggest content 0.30, structure 0.20, layout 0.30, visual 0.20) with a per-axis breakdown and a ranked list of **worst sections**. Thresholds (tunable in `data/`): pass ≥ 0.85, warn 0.70–0.85, fail < 0.70; hard sub-gates e.g. text coverage ≥ 0.95, landmark order exact.
+- **S2.6 `compare_to_target()` tool**: New tool in `tools.py` that caches the target capture for the session, runs `compare.py` against current `output/index.html`, and returns the report JSON (+ optional diff image block). Register in `TOOL_HANDLERS`.
+- **S2.7 Loop + gate integration**: Update `SYSTEM_PROMPT` so step 3 calls `compare_to_target()` and fixes the **named worst sections**; stop when total ≥ pass or max iters hit. Add a batch script that writes a per-site, per-axis report into `data/`.
+
+**Test points / exit criteria**
+
+- On a benchmark URL, `compare_to_target()` returns a JSON report with all four axis scores and a non-empty "worst sections" list.
+- Make a deliberate regression (delete the footer) → structure + layout scores drop and the footer is named.
+- Change only a heading's text → content score drops while layout/visual stay high (proves axes are independent).
+- Visual score is stable across two identical runs (deterministic within a small epsilon); thresholds live in `data/` and are easy to tune.
+- Batch run prints a per-site, per-axis table.
+
+---
+
+### Phase 3 — Design tokens and customization
 
 **Goal**: Make output look like the source **and** be easy to re-brand by changing a few variables.
 
@@ -374,10 +440,10 @@ flowchart LR
     ROOT --> PREVIEW[live preview re-renders]
 ```
 
-- **S2.1 `extract_design_tokens()`**: From computed styles, emit colors/fonts/sizes/radius/shadow/spacing JSON.
-- **S2.2 Generation uses CSS variables**: System prompt requires `:root { --brand … }`; site references vars.
-- **S2.3 Token read/write tools**: Read/write `:root` on the current output.
-- **S2.4 UI Design Tokens panel**: Right panel lists vars; edit → write back → live preview.
+- **S3.1 `extract_design_tokens()`**: From computed styles, emit colors/fonts/sizes/radius/shadow/spacing JSON.
+- **S3.2 Generation uses CSS variables**: System prompt requires `:root { --brand … }`; site references vars.
+- **S3.3 Token read/write tools**: Read/write `:root` on the current output.
+- **S3.4 UI Design Tokens panel**: Right panel lists vars; edit → write back → live preview.
 
 **Test points / exit criteria**
 
@@ -387,7 +453,7 @@ flowchart LR
 
 ---
 
-### Phase 3 — Small edits + Code view + compare
+### Phase 4 — Small edits + Code view + compare
 
 **Goal**: Stop rewriting the whole file; prove the output is clean and “almost the same.”
 
@@ -411,23 +477,23 @@ flowchart TD
     SIM --> COMPARE[Compare page: source vs output + score badge]
 ```
 
-- **S3.1 Section anchors**: Generation adds stable `data-section` (hero, features, …).
-- **S3.2 `edit_section(selector, html)`**: Replace one block, not the whole page.
-- **S3.3 Preview/Code toggle**: Center tabs; Code shows HTML source.
-- **S3.4 Code extras**: Syntax highlight + Copy/Download.
-- **S3.5 File tree + Format**: If CSS split, show tree; Format button.
-- **S3.6 Similarity score**: Simple image similarity between source and output screenshots.
-- **S3.7 Compare page**: Left source, right output + score badge.
+- **S4.1 Section anchors**: Generation adds stable `data-section` (hero, features, …).
+- **S4.2 `edit_section(selector, html)`**: Replace one block, not the whole page.
+- **S4.3 Preview/Code toggle**: Center tabs; Code shows HTML source.
+- **S4.4 Code extras**: Syntax highlight + Copy/Download.
+- **S4.5 File tree + Format**: If CSS split, show tree; Format button.
+- **S4.6 Score source (use Phase 2)**: Reuse `compare_to_target()` / `fidelity_report()` from Phase 2 instead of a new ad-hoc metric.
+- **S4.7 Compare page**: Left source, right output + the Phase 2 score breakdown (content / structure / layout / visual) and diff heatmap.
 
 **Test points / exit criteria**
 
 - Anchors exist in HTML; a hero edit does not break other sections.
 - Code view: switch works; copy/download work; formatted code reads well.
-- Similarity returns a believable number; compare page opens and shows the score.
+- Compare page opens and shows the Phase 2 per-axis breakdown, not just one number.
 
 ---
 
-### Phase 4 — Reliability and control (score boost)
+### Phase 5 — Reliability and control (score boost)
 
 **Goal**: Move from “it runs” to “we trust it” — versioned, reversible, with clear failure handling.
 
@@ -452,12 +518,12 @@ flowchart TD
     BENCH[benchmark set] --> BATCH[batch run → regression report]
 ```
 
-- **S4.1 Version snapshots**: Before each write to `output`, save a timestamped snapshot.
-- **S4.2 One-click rollback**: UI or API to restore last snapshot.
-- **S4.3 Diff preview**: Show diff for the current change.
-- **S4.4 Accept/reject change**: Reject = rollback that step.
-- **S4.5 Errors and fallbacks**: Clear copy for fetch fail / timeout / blocked images.
-- **S4.6 Multi-site batch**: Script runs benchmark set and logs similarity.
+- **S5.1 Version snapshots**: Before each write to `output`, save a timestamped snapshot.
+- **S5.2 One-click rollback**: UI or API to restore last snapshot.
+- **S5.3 Diff preview**: Show diff for the current change.
+- **S5.4 Accept/reject change**: Reject = rollback that step.
+- **S5.5 Errors and fallbacks**: Clear copy for fetch fail / timeout / blocked images.
+- **S5.6 Multi-site batch**: Script runs benchmark set and logs similarity.
 
 **Test points / exit criteria**
 
@@ -468,7 +534,7 @@ flowchart TD
 
 ---
 
-### Phase 5 — (Bonus) Small-model fine-tuning (can run in parallel)
+### Phase 6 — (Bonus) Small-model fine-tuning (can run in parallel)
 
 **Goal**: Show ML depth in one small, sharp slice of the pipeline.
 
@@ -487,10 +553,10 @@ flowchart LR
     EVAL --> WIRE[optional tool in pipeline]
 ```
 
-- **S5.1 Pick one task + I/O schema**: Token extract vs HTML cleanup vs section parse.
-- **S5.2 Build dataset**: Benchmark sites + main-agent labels; spot-check by hand.
-- **S5.3 LoRA train**: Qwen2.5-0.5B/1.5B scale is enough to demo.
-- **S5.4 Eval + wire**: Metrics vs zero-shot baseline; optional tool in the pipeline.
+- **S6.1 Pick one task + I/O schema**: Token extract vs HTML cleanup vs section parse.
+- **S6.2 Build dataset**: Benchmark sites + main-agent labels; spot-check by hand.
+- **S6.3 LoRA train**: Qwen2.5-0.5B/1.5B scale is enough to demo.
+- **S6.4 Eval + wire**: Metrics vs zero-shot baseline; optional tool in the pipeline.
 
 **Test points / exit criteria**
 
@@ -500,7 +566,7 @@ flowchart LR
 
 ---
 
-### Phase 6 — (Bonus) Deploy and scalable API
+### Phase 7 — (Bonus) Deploy and scalable API
 
 **Goal**: Match the email ask — a public URL and an API that can grow.
 
@@ -525,10 +591,10 @@ flowchart LR
     CONTAINER --> HOST[Render/Fly → public URL]
 ```
 
-- **S6.1 Container**: Dockerfile with Playwright/Chromium; runs end-to-end in container.
-- **S6.2 Split fetch/screenshot worker**: Separate from main API (heavy, isolate).
-- **S6.3 Deploy**: Render/Fly or similar; public URL works.
-- **S6.4 Scale story**: Stateless requests + job queue + concurrency/quotas → APPROACH.md.
+- **S7.1 Container**: Dockerfile with Playwright/Chromium; runs end-to-end in container.
+- **S7.2 Split fetch/screenshot worker**: Separate from main API (heavy, isolate).
+- **S7.3 Deploy**: Render/Fly or similar; public URL works.
+- **S7.4 Scale story**: Stateless requests + job queue + concurrency/quotas → APPROACH.md.
 
 **Test points / exit criteria**
 
@@ -545,12 +611,13 @@ flowchart LR
 | ----- | ---------------------------- | --------- | ------------- |
 | 0     | Baseline                     | 0.5 d     | Yes           |
 | 1     | Visual loop                  | 1 d       | Yes           |
-| 2     | Design tokens                | 0.5–1 d   | Yes           |
-| 3     | Small edits + Code + compare | 1 d       | Yes           |
-| 4     | Reliability                  | 0.5–1 d   | Yes (score)   |
-| 5     | Fine-tune                    | —         | Bonus         |
-| 6     | Deploy + API                 | 0.5 d     | Bonus (email) |
+| 2     | Fidelity verification        | 0.5–1 d   | Yes           |
+| 3     | Design tokens                | 0.5–1 d   | Yes           |
+| 4     | Small edits + Code + compare | 1 d       | Yes           |
+| 5     | Reliability                  | 0.5–1 d   | Yes (score)   |
+| 6     | Fine-tune                    | —         | Bonus         |
+| 7     | Deploy + API                 | 0.5 d     | Bonus (email) |
 
 
-> Rule: **finish vertical slices first (Phase 0→1→2→3 each demoable), then harden (4), then bonus (5/6).** Prefer one small commit per step. If a phase slips, keep the main demo path and move cuts to APPROACH.md “Next.”
+> Rule: **finish vertical slices first (Phase 0→1→2→3→4 each demoable), then harden (5), then bonus (6/7).** Prefer one small commit per step. If a phase slips, keep the main demo path and move cuts to APPROACH.md “Next.”
 
