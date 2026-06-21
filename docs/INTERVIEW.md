@@ -18,6 +18,7 @@ All per-phase “what we ship / why / how we verify” notes live in **this one 
 | Phase 0 | [#interview-phase-0](#interview-phase-0) |
 | Phase 1 | [#interview-phase-1](#interview-phase-1) |
 | Phase 2 | [#interview-phase-2](#interview-phase-2) |
+| Phase 4 | [#interview-phase-4](#interview-phase-4) |
 
 ---
 
@@ -255,3 +256,34 @@ How do we prove this phase’s definition of done?
 - `python scripts/verify_phase2.py` — footer regression, heading-only drop, deterministic visual.
 - `compare_to_target(url)` returns four axes + non-empty `worst_sections` on a real run.
 - Self-compare of `output/index.html` yields `verdict: pass`, `total: 1.0`.
+
+---
+
+<a id="interview-phase-4"></a>
+
+## Phase 4 — Small edits + Code + Compare (implemented)
+
+> Maps to [`IDEA.md`](../IDEA.md) Phase 4 · Plan: [`phase-4-edits-compare.md`](phase-4-edits-compare.md)
+
+### What we ship
+
+1. **`edit_section(selector, html)`** — bs4 partial replace by `data-section` / `#id` / tag.
+2. **Code tab** — `GET /source`, highlight, Copy, Download, Format (display-only).
+3. **Compare tab** — `POST /compare` + Phase 2 four-axis report, tiles, heatmap (`GET /shots/`).
+4. **`scripts/verify_phase4.py`** — section list/replace unit tests.
+
+### Likely follow-up questions
+
+#### Q1: Why BeautifulSoup?
+
+**Answer:** Nested HTML breaks regex replacements. bs4 finds the first anchored block and swaps only that fragment.
+
+#### Q2: Does Compare call the agent?
+
+**Answer:** No. `POST /compare` runs Playwright + `fidelity_report` directly — same math as `compare_to_target`, for the UI.
+
+### How we verify
+
+- `python scripts/verify_phase4.py`
+- Code tab copy/download on a generated page.
+- Compare tab shows content/structure/layout/visual scores after Run compare.

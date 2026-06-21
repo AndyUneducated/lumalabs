@@ -23,6 +23,7 @@ from compare import (
     load_config,
     resolve_profile,
 )
+from sections import list_sections, replace_section
 from tokens import (
     extract_tokens_from_styles,
     format_root_block,
@@ -327,6 +328,85 @@ def _manifest_for_url(url: str) -> dict | None:
     return None
 
 
+def _shot_urls(paths: list[Path]) -> list[str]:
+    return [f"/shots/{p.name}" for p in paths if p.is_file()]
+
+
+async def run_fidelity_comparison(
+    url: str, profile: str | None = None
+) -> dict[str, Any]:
+    """Run Phase 2 fidelity compare; shared by compare_to_target and POST /compare."""
+    prof = resolve_profile(profile or _session_profile)
+    normalized = _normalize_url(url)
+
+    if normalized not in _target_cache:
+        _target_cache[normalized] = await capture_compare(normalized, is_file=False)
+    target = _target_cache[normalized]
+
+    if not OUTPUT_FILE.is_file():
+        return {"error": "No output/index.html yet. Call write_html first."}
+
+    output = await capture_compare(str(OUTPUT_FILE.resolve()), is_file=True)
+
+    if target.compare_payload is None or output.compare_payload is None:
+        return {
+            "error": "compare_unavailable",
+            "detail": (
+                f"Target error: {target.error or 'none'}. "
+                f"Output error: {output.error or 'none'}."
+            ),
+        }
+
+    cfg = load_config(profile=prof)
+    output_html = OUTPUT_FILE.read_text()
+    manifest = _manifest_for_url(normalized)
+    report = fidelity_report(
+        target.compare_payload,
+        output.compare_payload,
+        target.paths,
+        output.paths,
+        cfg,
+        asset_manifest=manifest,
+        output_html=output_html,
+    )
+    diff_path = diff_heatmap(target.paths, output.paths)
+
+    return {
+        "report": report,
+        "profile": prof,
+        "source_tiles": _shot_urls(target.paths),
+        "output_tiles": _shot_urls(output.paths),
+        "heatmap": f"/shots/{diff_path.name}" if diff_path and diff_path.is_file() else None,
+    }
+
+
+async def edit_section(selector: str, html: str):
+    """Replace one page section without rewriting the full document.
+
+    Targets the first element matching selector (data-section name, #id, or tag).
+    Use after initial write_html; prefer this for "change the hero" style edits.
+
+    Args:
+        selector: Section id, e.g. hero, footer, or CSS selector [data-section="hero"]
+        html: New HTML fragment for that section (not a full document)
+    """
+    if not OUTPUT_FILE.is_file():
+        return "No output/index.html yet. Call write_html first."
+
+    source = OUTPUT_FILE.read_text()
+    updated, matched = replace_section(source, selector, html)
+    if not matched:
+        available = list_sections(source)
+        names = ", ".join(s["selector"] for s in available) or "none"
+        return (
+            f"Section '{selector}' not found. Available data-section anchors: {names}"
+        )
+
+    OUTPUT_FILE.write_text(updated)
+    _notify("html_updated")
+    return f"Section '{selector}' updated ({len(html)} chars). Preview refreshed."
+
+
 async def compare_to_target(url: str, profile: str | None = None):
     """Compare output/index.html to the target URL with a fidelity report.
 
@@ -339,56 +419,16 @@ async def compare_to_target(url: str, profile: str | None = None):
         profile: Fidelity knob — more_editable, balanced (default), or more_faithful
     """
     prof = resolve_profile(profile or _session_profile)
-    normalized = _normalize_url(url)
+    result = await run_fidelity_comparison(url, profile=prof)
 
-    if normalized not in _target_cache:
-        _target_cache[normalized] = await capture_compare(normalized, is_file=False)
-    target = _target_cache[normalized]
+    if result.get("error"):
+        msg = result["error"]
+        if result.get("detail"):
+            msg += " " + result["detail"]
+        return {"content": [{"type": "text", "text": msg}]}
 
-    if not OUTPUT_FILE.is_file():
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        "No output/index.html yet. Call write_html first, "
-                        "then compare_to_target."
-                    ),
-                }
-            ]
-        }
-
-    output = await capture_compare(str(OUTPUT_FILE.resolve()), is_file=True)
-
-    if target.compare_payload is None or output.compare_payload is None:
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        "Compare payload unavailable (DOM-only capture). "
-                        f"Target error: {target.error or 'none'}. "
-                        f"Output error: {output.error or 'none'}. "
-                        "Use screenshot_output for visual self-check."
-                    ),
-                }
-            ]
-        }
-
-    cfg = load_config(profile=prof)
-    output_html = OUTPUT_FILE.read_text() if OUTPUT_FILE.is_file() else ""
-    manifest = _manifest_for_url(normalized)
-    report = fidelity_report(
-        target.compare_payload,
-        output.compare_payload,
-        target.paths,
-        output.paths,
-        cfg,
-        asset_manifest=manifest,
-        output_html=output_html,
-    )
-
-    diff_path = diff_heatmap(target.paths, output.paths)
+    report = result["report"]
+    prof = result.get("profile", prof)
     content: list[dict] = [
         {
             "type": "text",
@@ -398,14 +438,14 @@ async def compare_to_target(url: str, profile: str | None = None):
             ),
         }
     ]
-    if diff_path and diff_path.is_file():
-        content.append(
-            {
-                "type": "text",
-                "text": f"Diff heatmap saved to: {diff_path}",
-            }
-        )
-        content.extend(_paths_to_image_blocks([diff_path]))
+    heatmap = result.get("heatmap")
+    if heatmap:
+        heatmap_path = Path("output") / ".shots" / Path(heatmap).name
+        if heatmap_path.is_file():
+            content.append(
+                {"type": "text", "text": f"Diff heatmap saved to: {heatmap_path}"}
+            )
+            content.extend(_paths_to_image_blocks([heatmap_path]))
 
     return {"content": content}
 
@@ -485,6 +525,7 @@ async def set_design_token(name: str, value: str):
 TOOL_HANDLERS = [
     write_html,
     read_html,
+    edit_section,
     capture_site,
     screenshot_output,
     extract_assets,

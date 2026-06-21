@@ -4,7 +4,7 @@
 >
 > This file is the product + design + engineering plan. Use it for APPROACH.md and for build work.
 >
-> **Supporting docs**: [`docs/ADR.md`](docs/ADR.md) (architecture decisions), [`docs/INTERVIEW.md`](docs/INTERVIEW.md) (interview prep by phase), [`docs/phase-1-visual-loop.md`](docs/phase-1-visual-loop.md) (Phase 1 plan + implementation map), [`docs/phase-2-fidelity.md`](docs/phase-2-fidelity.md) (Phase 2 fidelity scoring + thresholds).
+> **Supporting docs**: [`docs/ADR.md`](docs/ADR.md) (architecture decisions), [`docs/INTERVIEW.md`](docs/INTERVIEW.md) (interview prep by phase), [`docs/phase-1-visual-loop.md`](docs/phase-1-visual-loop.md) (Phase 1 plan + implementation map), [`docs/phase-2-fidelity.md`](docs/phase-2-fidelity.md) (Phase 2 fidelity scoring + thresholds), [`docs/phase-3-tokens.md`](docs/phase-3-tokens.md) (Phase 3 design tokens), [`docs/phase-4-edits-compare.md`](docs/phase-4-edits-compare.md) (Phase 4 edits + Code + Compare).
 
 ---
 
@@ -462,6 +462,8 @@ flowchart LR
 
 ### Phase 4 — Small edits + Code view + compare
 
+> **Docs**: [`docs/phase-4-edits-compare.md`](docs/phase-4-edits-compare.md) (technical plan) · ADR [`0010`](docs/ADR.md#adr-0010)
+
 **Goal**: Stop rewriting the whole file; prove the output is clean and “almost the same.”
 
 **Features / user stories**
@@ -484,13 +486,14 @@ flowchart TD
     SIM --> COMPARE[Compare page: source vs output + score badge]
 ```
 
-- **S4.1 Section anchors**: Generation adds stable `data-section` (hero, features, …).
-- **S4.2 `edit_section(selector, html)`**: Replace one block, not the whole page.
-- **S4.3 Preview/Code toggle**: Center tabs; Code shows HTML source.
-- **S4.4 Code extras**: Syntax highlight + Copy/Download.
-- **S4.5 File tree + Format**: If CSS split, show tree; Format button.
-- **S4.6 Score source (use Phase 2)**: Reuse `compare_to_target()` / `fidelity_report()` from Phase 2 instead of a new ad-hoc metric.
-- **S4.7 Compare page**: Left source, right output + the Phase 2 score breakdown (content / structure / layout / visual) and diff heatmap.
+- **S4.1 Section anchors**: Prompt requires stable `data-section` on major blocks.
+- **S4.2 `edit_section(selector, html)`**: [`sections.py`](sections.py) + bs4; one-block replace.
+- **S4.3 Preview/Code/Compare tabs**: Center panel view switcher in [`viewer.html`](viewer.html).
+- **S4.4 Code extras**: `GET /source`, offline highlight, Copy/Download/Format (display-only).
+- **S4.5 File tree**: **Out of scope** — single-file output.
+- **S4.6 Score source**: `run_fidelity_comparison()` shared by tool + `POST /compare`.
+- **S4.7 Compare tab**: Source vs output tiles, four-axis scores, gate failures, diff heatmap via `GET /shots/`.
+- **S4.8 Verify**: [`scripts/verify_phase4.py`](scripts/verify_phase4.py).
 
 **Test points / exit criteria**
 

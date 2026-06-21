@@ -164,6 +164,46 @@ async def serve_asset(asset_path: str):
     return HTMLResponse("Not found", status_code=404)
 
 
+SHOTS_DIR = Path("output") / ".shots"
+
+
+@app.get("/source")
+async def get_source():
+    if not OUTPUT_FILE.is_file():
+        return {"html": ""}
+    return {"html": OUTPUT_FILE.read_text()}
+
+
+@app.get("/shots/{shot_path:path}")
+async def serve_shot(shot_path: str):
+    """Serve screenshot tiles and diff heatmaps from output/.shots/."""
+    base = SHOTS_DIR.resolve()
+    file_path = (SHOTS_DIR / shot_path).resolve()
+    if not str(file_path).startswith(str(base)):
+        return HTMLResponse("Forbidden", status_code=403)
+    if file_path.is_file():
+        return FileResponse(file_path, headers={"Cache-Control": "no-store"})
+    return HTMLResponse("Not found", status_code=404)
+
+
+class CompareRequest(BaseModel):
+    url: str
+    profile: str = "balanced"
+
+
+@app.post("/compare")
+async def run_compare(req: CompareRequest):
+    from tools import run_fidelity_comparison
+
+    result = await run_fidelity_comparison(req.url, profile=req.profile)
+    if result.get("error"):
+        return {
+            "error": result["error"],
+            "detail": result.get("detail"),
+        }
+    return result
+
+
 # --- Design tokens (panel, no LLM) ---
 
 
@@ -245,8 +285,9 @@ same layout, same colors, same typography, same visual rhythm — but with code 
 the user can customize.
 
 You have tools to capture screenshots, extract design tokens, compare fidelity \
-to the target, write and read HTML, patch individual CSS variables, and \
-screenshot your own output. The user sees a live preview of your HTML.
+to the target, write and read HTML, edit individual sections with `edit_section`, \
+patch CSS variables, and screenshot your own output. The user sees a live preview \
+of your HTML.
 
 **Design tokens (required for every profile):**
 - Author exactly one `:root { }` block in `<style>` using these canonical names:
@@ -259,6 +300,11 @@ screenshot your own output. The user sees a live preview of your HTML.
 - Reference `var(--token)` for every color, font-family, font-size, border-radius, \
 and key spacing — **no repeated color/font literals** in rules.
 - For rebrand follow-ups ("make it purple"), prefer `set_design_token` over rewriting.
+
+**Section anchors (required for every profile):**
+- Add stable `data-section` on each major block, e.g. `nav`, `hero`, `features`, `cta`, `footer`.
+- Use semantic wrappers (`header`, `section`, `footer`) with `data-section="…"` so partial edits work.
+- For follow-up edits ("change the hero"), prefer `edit_section(selector, html)` over `write_html` full rewrites.
 
 When the user gives you a URL, follow this workflow strictly:
 
@@ -278,8 +324,8 @@ Optionally call `screenshot_output()` when you need a visual sanity check.
 `pass`, or when you hit the iteration cap — then summarize per-axis scores and \
 any remaining gaps from `worst_sections`.
 
-For follow-up edits (no new URL), use `read_html` or `read_design_tokens`, make \
-focused changes, and optionally `screenshot_output()` to verify.
+For follow-up edits (no new URL), use `read_html`, `edit_section`, or \
+`read_design_tokens` for focused changes; optionally `screenshot_output()` to verify.
 
 If `capture_site` returns a DOM-only fallback (no images), use the style JSON \
 and text outline; do not invent a generic template.
@@ -526,12 +572,13 @@ async def _run_agent(
 @app.get("/chat/history/{session_id}")
 async def chat_history(session_id: str):
     """Load chat history from the Claude session JSONL file."""
+    meta = _sessions.get(session_id) or {}
     sdir = _get_session_dir()
     if not sdir:
-        return {"messages": []}
+        return {"messages": [], "url": meta.get("url"), "fidelity_profile": meta.get("fidelity_profile")}
     jsonl_path = sdir / f"{session_id}.jsonl"
     if not jsonl_path.exists():
-        return {"messages": []}
+        return {"messages": [], "url": meta.get("url"), "fidelity_profile": meta.get("fidelity_profile")}
 
     messages = []
     for line in jsonl_path.read_text().splitlines():
@@ -554,7 +601,11 @@ async def chat_history(session_id: str):
                     if text:
                         messages.append({"role": "assistant", "text": text})
 
-    return {"messages": messages}
+    return {
+        "messages": messages,
+        "url": meta.get("url"),
+        "fidelity_profile": meta.get("fidelity_profile"),
+    }
 
 
 @app.get("/chat/sessions")

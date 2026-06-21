@@ -13,6 +13,7 @@ All architecture decisions for this project live in this single file. Older numb
 | [0007](#adr-0007) | Fidelity knob: more_editable / balanced / more_faithful profiles | Phase 2 |
 | [0008](#adr-0008) | Asset mirroring + asset_coverage (more_faithful only) | Phase 2 |
 | [0009](#adr-0009) | Design tokens: `:root` as source of truth + live edit | Phase 3 |
+| [0010](#adr-0010) | Partial edits + Code/Compare UI (Phase 4) | Phase 4 |
 
 ---
 
@@ -399,6 +400,49 @@ Generation hard-codes colors/fonts, so "re-brand" means a full-file rewrite — 
 - **Impact**: new `tokens.py`, two endpoints, three tools, a viewer panel; prompt requires `:root` + `var(--…)`.
 - **Risk**: `patch_root_vars` must target the first `:root` only and preserve the rest of the file; covered by `scripts/verify_phase3.py` round-trip tests.
 - **Limit**: single `:root` (no per-component themes / light-dark); spacing/shadow extraction is best-effort.
+
+---
+
+<a id="adr-0010"></a>
+
+## 0010 — Partial edits + Code/Compare UI (Phase 4)
+
+- **Status**: Accepted
+- **Date**: 2026-06-20
+- **Phase**: Phase 4
+
+### Context
+
+`write_html` replaces the entire document each turn — slow, regression-prone, and poor for chat edits like "change the hero." Reviewers also need to see clean source code and a visual fidelity breakdown, not only agent tool JSON.
+
+### Decision
+
+1. **`data-section` anchors** in generation prompt (`nav`, `hero`, `features`, `cta`, `footer`, …).
+2. [`sections.py`](../sections.py) + **`edit_section(selector, html)`** using BeautifulSoup4; prefer partial edits over full rewrites in follow-ups.
+3. **Code view**: `GET /source`, offline syntax highlight, Copy / Download / Format (display-only).
+4. **Compare view**: `run_fidelity_comparison()` shared by tool + **`POST /compare`**; **`GET /shots/{path}`** serves tiles/heatmap; UI shows four-axis scores + worst sections.
+5. No multi-file tree (single `index.html`).
+
+### Rationale
+
+- bs4 gives reliable fragment replacement vs regex on nested HTML.
+- Compare reuses Phase 2 scoring — no third similarity metric.
+- Panel/API compare bypasses the LLM for deterministic reviewer demos.
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Regex section replace | No new dep | Breaks on nesting | Not chosen |
+| BeautifulSoup replace | Robust | Normalizes HTML slightly | **Chosen** |
+| Embed Monaco | Rich editor | Heavy, CDN | Not chosen |
+| New similarity score | Custom | Duplicates Phase 2 | Not chosen |
+
+### Consequences and risks
+
+- **Impact**: `sections.py`, `edit_section` tool, three view tabs, `/source` `/compare` `/shots`.
+- **Risk**: bs4 may reformat HTML on save; mitigated by surgical single-block replace.
+- **Limit**: no file tree / rollback (Phase 5).
 
 ---
 
