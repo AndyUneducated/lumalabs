@@ -8,6 +8,10 @@ All architecture decisions for this project live in this single file. Older numb
 | [0002](#adr-0002) | Model config: `AGENT_MODEL` env var | Phase 0 |
 | [0003](#adr-0003) | Observability: startup self-check logs (stderr) | Phase 0 |
 | [0004](#adr-0004) | Benchmark URL set: `data/benchmarks.json` | Phase 0 |
+| [0005](#adr-0005) | Phase 1 visual loop: Playwright + MCP image blocks | Phase 1 |
+| [0006](#adr-0006) | Phase 2 fidelity: four-axis scoring + two-layer thresholds | Phase 2 |
+| [0007](#adr-0007) | Fidelity knob: more_editable / balanced / more_faithful profiles | Phase 2 |
+| [0008](#adr-0008) | Asset mirroring + asset_coverage (more_faithful only) | Phase 2 |
 
 ---
 
@@ -179,9 +183,184 @@ Track the file in git (`data/` exists; only `data/.session_id` is gitignored).
 
 ---
 
+<a id="adr-0005"></a>
+
+## 0005 — Phase 1 visual loop: Playwright + MCP image blocks
+
+- **Status**: Accepted
+- **Date**: 2026-06-20
+- **Phase**: Phase 1
+
+### Context
+
+The agent could only use `WebFetch` (text) plus `write_html` / `read_html`. It never saw the target site or its own output as pixels, so copies were guess-based. We needed a production-style **visual loop** without rewriting the whole agent transport.
+
+### Decision
+
+1. Add **`playwright`** (pinned) and **`browser.py`**: headless Chromium, shared browser, `asyncio.Lock`, navigation timeout, tiled PNG captures to `output/.shots/`, plus a compact **computed-style JSON** via `page.evaluate`.
+2. Add MCP tools **`capture_site(url)`** and **`screenshot_output()`** in [`tools.py`](../tools.py): return MCP `content` with **text + `image` blocks** (base64 PNG, `mimeType: image/png`) plus the styles JSON text block.
+3. Extend **`_make_handler`** so tool results that already look like `{"content": [...]}` pass through unchanged; plain strings still become a single text block.
+4. Update **`SYSTEM_PROMPT`** in [`server.py`](../server.py): look (`capture_site`) → build (`write_html`) → self-check (`screenshot_output`) → fix; cap iterations in prose; on nav failure use DOM-only fallback (no images).
+5. Call **`close_browser()`** from FastAPI **`lifespan`** shutdown so Playwright does not leak on reload.
+
+Full step checklist and diagram: [`phase-1-visual-loop.md`](phase-1-visual-loop.md).
+
+### Rationale
+
+- `claude-agent-sdk` already maps tool output image dicts to `ImageContent` for the CLI — no separate multimodal `query()` API was needed.
+- Tiled screenshots keep each image within a useful size for vision models.
+- Style JSON gives structured signals when screenshots fail (DOM-only path).
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Return only file paths in text; model reads files elsewhere | Small payloads | Not supported as a built-in second hop in this MCP surface | Not chosen |
+| Push images via `client.query` multimodal | Full control | Tighter coupling to SDK message types; more code in `server.py` | Not chosen |
+| MCP tools return image blocks + JSON text | Uses existing tool path; works with CLI transport | Larger RPC payloads; needs Playwright in deploy | **Chosen** |
+
+### Consequences and risks
+
+- **Impact**: New dependency and disk under `output/.shots/`; CI / Docker must run `playwright install chromium` (see Phase 7 in `IDEA.md`).
+- **Risk**: Some sites block automation or never reach `networkidle` — mitigated by timeout + DOM-only fallback.
+- **Docs**: Plan persisted in [`phase-1-visual-loop.md`](phase-1-visual-loop.md); interview notes in [`INTERVIEW.md`](INTERVIEW.md#interview-phase-1).
+
+---
+
+<a id="adr-0006"></a>
+
+## 0006 — Phase 2 fidelity: four-axis scoring + two-layer thresholds
+
+- **Status**: Accepted
+- **Date**: 2026-06-20
+- **Phase**: Phase 2
+
+### Context
+
+Phase 1 let the agent see pixels and self-check in prose, but "looks close" was subjective. We needed measurable scores on content, structure, layout, and visual fidelity — with thresholds the loop and batch scripts can gate on — without rewriting the MCP transport.
+
+### Decision
+
+1. Add **`compare.py`** (pure Python, no Playwright): `score_content`, `score_structure`, `score_layout`, `score_visual` (local windowed SSIM + pHash via Pillow/numpy; no scikit-image), `fidelity_report`, optional `diff_heatmap`.
+2. Extend **`browser.py`** with `_EXTRACT_COMPARE_JS` and **`capture_compare()`** returning text blocks, skeleton, section boxes, and tiles.
+3. Add MCP tool **`compare_to_target(url)`** with per-URL target cache in [`tools.py`](../tools.py).
+4. **Two-layer thresholds** in [`data/fidelity.json`](../data/fidelity.json): per-axis hard gates (content coverage, landmark order, min block IoU) plus normalized weighted total with pass/warn bands. Floors/ceilings calibrated via `scripts/fidelity_batch.py --calibrate`.
+5. Update **`SYSTEM_PROMPT`**: self-check calls `compare_to_target`, fixes `worst_sections`, stops on pass or iteration cap.
+
+Full plan: [`phase-2-fidelity.md`](phase-2-fidelity.md).
+
+### Rationale
+
+- Four axes catch different failure modes (missing copy vs misplaced blocks vs pixel drift).
+- Normalizing each axis to `[floor, ceil]` makes a single weighted total meaningful.
+- Hard gates prevent high visual scores from masking missing sections.
+- Pure `compare.py` is unit-testable without a browser.
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Visual-only (SSIM / pixel diff) | Simple | Misses text/structure errors | Not chosen alone |
+| scikit-image SSIM | Battle-tested | Extra dep | Not chosen; local numpy SSIM |
+| One global threshold | Easy | False pass when one axis fails badly | Not chosen |
+| Two-layer per-axis + normalized total | Tunable, explainable | More config | **Chosen** |
+
+### Consequences and risks
+
+- **Impact**: New deps (`Pillow`, `numpy`); `data/fidelity.json` must be tuned per benchmark set.
+- **Risk**: Remote `networkidle` hangs slow batch runs — use local HTML for quick checks; timeouts unchanged from Phase 1.
+- **Docs**: [`phase-2-fidelity.md`](phase-2-fidelity.md); interview in [`INTERVIEW.md`](INTERVIEW.md#interview-phase-2).
+
+---
+
+<a id="adr-0007"></a>
+
+## 0007 — Fidelity knob: more_editable / balanced / more_faithful profiles
+
+- **Status**: Accepted
+- **Date**: 2026-06-20
+- **Phase**: Phase 2
+
+### Context
+
+Phase 2 scoring exposed a product tension: **semantic, editable HTML** scores low on **structure** vs div-heavy production DOM on many target sites. Users and reviewers need to see this as an intentional tradeoff, not a bug — and power users may want more visual fidelity at the cost of slightly messier markup.
+
+### Decision
+
+Add a **3-position fidelity knob** wired through one field, `fidelity_profile`:
+
+1. **UI** (`viewer.html`): segmented control on landing + builder toolbar; default **balanced**; persisted in `localStorage`.
+2. **Prompt** (`server.py`): `_PROFILE_BUILD_RULES` appended to system prompt per profile (how to `write_html`).
+3. **Scoring** (`data/fidelity.json` → `compare.load_config(profile=...)`): per-profile weights, thresholds, and hard gates. **Editable** sets structure weight to 0 and drops structure from `worst_sections`.
+4. **Tool** (`compare_to_target(url, profile=...)`): report includes `profile`; server sets session default via `set_fidelity_profile()` before each agent run.
+
+We did **not** add a separate "1:1 DOM clone" engine — all profiles share the same capture/compare pipeline.
+
+### Rationale
+
+- **Prompt alone** would change generation but leave scoring misaligned (false fails on structure).
+- **Scoring alone** would not change what the agent builds.
+- Three tiers express the editable↔faithful spectrum; **balanced** matches the take-home product goal.
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Two modes only (editable vs 1:1) | Simple UI | Hides the default "sweet spot"; 1:1 fights product goal | Not chosen |
+| Prompt-only knob | Tiny diff | Scores disagree with intent | Not chosen |
+| Prompt + profile-scoped config | Aligned behavior and metrics | More JSON config | **Chosen** |
+| Full second capture pipeline for 1:1 | True clone | Huge scope; off-mission | Not chosen |
+
+### Consequences and risks
+
+- **Impact**: `data/fidelity.json` grows `profiles` block; `/chat` accepts `fidelity_profile`.
+- **Risk**: User changes profile mid-session — later compares should pass the same profile explicitly (session default + tool arg).
+- **Docs**: [`phase-2-fidelity.md`](phase-2-fidelity.md#fidelity-knob-3-profiles).
+
+---
+
+<a id="adr-0008"></a>
+
+## 0008 — Asset mirroring + asset_coverage (more_faithful only)
+
+- **Status**: Accepted
+- **Date**: 2026-06-20
+- **Phase**: Phase 2
+
+### Context
+
+**More faithful** mode still used logo placeholders because prompts forbade real assets and there was no download pipeline. Users expect mirrored logos and heroes while keeping semantic HTML.
+
+### Decision
+
+1. Add [`assets.py`](../assets.py) + MCP tool **`extract_assets(url)`**: Playwright collects:
+   - `<img>` (including lazy `data-src`, `srcset`)
+   - favicon / font preload links
+   - **computed** `background-image` URLs (not only inline `style`)
+   - inline `<svg>` serialized to local `.svg` files
+   - `@font-face` URLs downloaded to `output/assets/fonts/`
+   Writes `manifest.json` with `preview_path` (`/assets/...`), `fonts`, and `hints.font_faces`.
+2. Serve files via **`GET /assets/{path}`** in [`server.py`](../server.py) so preview uses same-origin paths.
+3. **`more_faithful` prompt**: mandatory `extract_assets` after `capture_site`; use manifest paths for img/background/SVG/fonts; forbid wordmark placeholders when mirrored logo exists.
+4. **`asset_coverage`** in [`compare.py`](../compare.py): share of mirrored role assets (logo, favicon, hero, **font** when present) referenced in output HTML.
+5. **Enforcement scope**: `asset_coverage` hard gate + weighted axis + `worst_sections` **only when `profile == more_faithful`**. Other profiles report `assets.enforced: false` (informational if manifest exists).
+6. Rename profiles: `editable` → **`more_editable`**, `faithful` → **`more_faithful`** (legacy aliases accepted).
+
+### Rationale
+
+- Local mirror beats hotlinking: works offline, improves visual SSIM, fits export story.
+- Scoring asset coverage only in **more_faithful** avoids punishing placeholder logos in **more_editable** / **balanced**.
+
+### Consequences
+
+- **Impact**: `output/assets/` on disk; agent must call `extract_assets` before compare in more_faithful.
+- **Limit**: Cross-origin stylesheets may hide some `@font-face` rules; sprite sheets and canvas logos still out of scope.
+
+---
+
 ## Adding a new ADR
 
-Use the next free number (0005, 0006, …). Append a new section at the bottom of this file with the same shape:
+Use the next free number (0009, 0010, …). Append a new section at the bottom of this file with the same shape:
 
 - **Status**: Proposed | Accepted | Superseded by NNNN  
 - **Date**: YYYY-MM-DD  

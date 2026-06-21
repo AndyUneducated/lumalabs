@@ -14,7 +14,15 @@ import types
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
 
-from browser import CaptureResult, capture_file, capture_url
+from assets import extract_assets_url, load_manifest
+from browser import CaptureResult, capture_compare, capture_file, capture_url
+from compare import (
+    DEFAULT_PROFILE,
+    diff_heatmap,
+    fidelity_report,
+    load_config,
+    resolve_profile,
+)
 
 SERVER_NAME = "builder"
 
@@ -128,6 +136,28 @@ def _generate_tool_definition(fn) -> dict[str, Any]:
 OUTPUT_DIR = Path("output")
 OUTPUT_FILE = OUTPUT_DIR / "index.html"
 
+_target_cache: dict[str, CaptureResult] = {}
+_asset_manifest_cache: dict[str, dict] = {}
+_session_profile: str = DEFAULT_PROFILE
+
+
+def set_fidelity_profile(profile: str | None) -> str:
+    """Set the active fidelity profile for this agent run (called from server.py)."""
+    global _session_profile
+    _session_profile = resolve_profile(profile)
+    return _session_profile
+
+
+def get_fidelity_profile() -> str:
+    return _session_profile
+
+
+def _normalize_url(url: str) -> str:
+    u = url.strip()
+    if not u.startswith(("http://", "https://")):
+        u = "https://" + u.lstrip("/")
+    return u
+
 
 async def write_html(html: str):
     """Write HTML/CSS to the preview. The result renders live in the viewer.
@@ -240,8 +270,148 @@ async def screenshot_output():
     return _capture_to_content(result, "Screenshot of current output (output/index.html)")
 
 
+async def extract_assets(url: str):
+    """Mirror page assets (images, computed backgrounds, inline SVG, fonts) to output/assets/.
+
+    Call after capture_site when profile is more_faithful. Returns manifest JSON with
+    preview_path (/assets/...), inline SVG files, and font_faces CSS snippets.
+
+    Args:
+        url: Target site URL
+    """
+    normalized = _normalize_url(url)
+    result = await extract_assets_url(normalized)
+    if result.error and not result.downloaded:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Asset extract failed for {normalized}: {result.error}\n"
+                        "Fall back to capture_site styles only."
+                    ),
+                }
+            ]
+        }
+
+    _asset_manifest_cache[normalized] = result.manifest
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": (
+                    f"Downloaded {result.downloaded} asset(s) to output/assets/.\n"
+                    "Manifest (use preview_path in HTML):\n"
+                    + json.dumps(result.manifest, indent=2)
+                ),
+            }
+        ]
+    }
+
+
+def _manifest_for_url(url: str) -> dict | None:
+    normalized = _normalize_url(url)
+    if normalized in _asset_manifest_cache:
+        return _asset_manifest_cache[normalized]
+    manifest = load_manifest()
+    if manifest and manifest.get("source", "").rstrip("/") == normalized.rstrip("/"):
+        _asset_manifest_cache[normalized] = manifest
+        return manifest
+    return None
+
+
+async def compare_to_target(url: str, profile: str | None = None):
+    """Compare output/index.html to the target URL with a fidelity report.
+
+    Returns per-axis scores (content, structure, layout, visual), a weighted
+    total, verdict (pass/warn/fail), gate failures, and worst sections to fix.
+    Call after write_html during the self-check loop.
+
+    Args:
+        url: Target site URL (same URL used in capture_site)
+        profile: Fidelity knob — more_editable, balanced (default), or more_faithful
+    """
+    prof = resolve_profile(profile or _session_profile)
+    normalized = _normalize_url(url)
+
+    if normalized not in _target_cache:
+        _target_cache[normalized] = await capture_compare(normalized, is_file=False)
+    target = _target_cache[normalized]
+
+    if not OUTPUT_FILE.is_file():
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "No output/index.html yet. Call write_html first, "
+                        "then compare_to_target."
+                    ),
+                }
+            ]
+        }
+
+    output = await capture_compare(str(OUTPUT_FILE.resolve()), is_file=True)
+
+    if target.compare_payload is None or output.compare_payload is None:
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Compare payload unavailable (DOM-only capture). "
+                        f"Target error: {target.error or 'none'}. "
+                        f"Output error: {output.error or 'none'}. "
+                        "Use screenshot_output for visual self-check."
+                    ),
+                }
+            ]
+        }
+
+    cfg = load_config(profile=prof)
+    output_html = OUTPUT_FILE.read_text() if OUTPUT_FILE.is_file() else ""
+    manifest = _manifest_for_url(normalized)
+    report = fidelity_report(
+        target.compare_payload,
+        output.compare_payload,
+        target.paths,
+        output.paths,
+        cfg,
+        asset_manifest=manifest,
+        output_html=output_html,
+    )
+
+    diff_path = diff_heatmap(target.paths, output.paths)
+    content: list[dict] = [
+        {
+            "type": "text",
+            "text": (
+                f"Fidelity report (profile={prof}, JSON):\n"
+                + json.dumps(report, indent=2)
+            ),
+        }
+    ]
+    if diff_path and diff_path.is_file():
+        content.append(
+            {
+                "type": "text",
+                "text": f"Diff heatmap saved to: {diff_path}",
+            }
+        )
+        content.extend(_paths_to_image_blocks([diff_path]))
+
+    return {"content": content}
+
+
 # Registry — add new tool functions here
-TOOL_HANDLERS = [write_html, read_html, capture_site, screenshot_output]
+TOOL_HANDLERS = [
+    write_html,
+    read_html,
+    capture_site,
+    screenshot_output,
+    extract_assets,
+    compare_to_target,
+]
 TOOL_NAMES = [fn.__name__ for fn in TOOL_HANDLERS]
 
 

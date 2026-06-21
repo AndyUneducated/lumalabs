@@ -31,6 +31,36 @@
   }
   #url-submit:hover { opacity: 0.85; }
 
+  /* Fidelity profile knob */
+  #fidelity-knob { width: 100%; max-width: 500px; margin-top: 4px; }
+  #fidelity-knob label {
+    display: block; font-size: 11px; font-weight: 600; color: #a8a29e;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  #fidelity-segments, .fidelity-segments-row {
+    display: flex; gap: 0; border: 1px solid #e7e5e4; border-radius: 8px;
+    overflow: hidden; background: #fff;
+  }
+  .fidelity-seg {
+    flex: 1; padding: 10px 8px; border: none; background: transparent;
+    font-size: 12px; font-weight: 500; color: #78716c; cursor: pointer;
+    border-right: 1px solid #e7e5e4; transition: background 0.12s, color 0.12s;
+  }
+  .fidelity-seg:last-child { border-right: none; }
+  .fidelity-seg:hover { background: #f5f5f4; color: #1c1917; }
+  .fidelity-seg.active { background: #1c1917; color: #fff; }
+  #fidelity-hint {
+    font-size: 12px; color: #a8a29e; margin-top: 8px; line-height: 1.4; text-align: center;
+  }
+
+  #builder-toolbar {
+    display: none; align-items: center; gap: 12px; padding: 8px 12px;
+    background: #fff; border-bottom: 1px solid #e7e5e4; flex-shrink: 0;
+  }
+  #builder.active #builder-toolbar { display: flex; }
+  #builder-toolbar .fidelity-seg { padding: 6px 10px; font-size: 11px; }
+  #builder-toolbar .fidelity-segments-row { max-width: 320px; }
+
   /* Builder state */
   #builder { display: none; flex-direction: column; height: 100vh; }
   #builder.active { display: flex; }
@@ -110,14 +140,31 @@
   <h1>Website Template Builder</h1>
   <p>Paste the URL of a website you love. We'll create a customizable template from it.</p>
   <form id="url-form">
-    <input id="url-input" type="text" placeholder="stripe.com" required>
+    <input id="url-input" type="text" placeholder="example.com" required>
     <button id="url-submit" type="submit">Go</button>
   </form>
+  <div id="fidelity-knob">
+    <label>Fidelity — more editable ↔ more faithful</label>
+    <div id="fidelity-segments" class="fidelity-segments-row" role="group" aria-label="Fidelity profile">
+      <button type="button" class="fidelity-seg" data-profile="more_editable">More editable</button>
+      <button type="button" class="fidelity-seg active" data-profile="balanced">Balanced</button>
+      <button type="button" class="fidelity-seg" data-profile="more_faithful">More faithful</button>
+    </div>
+    <p id="fidelity-hint">Balanced: semantic HTML with strong layout and visual match (default).</p>
+  </div>
   <div id="sessions" style="margin-top:24px;width:100%;max-width:500px;"></div>
 </div>
 
 <!-- Builder: preview + chat -->
 <div id="builder">
+  <div id="builder-toolbar">
+    <span style="font-size:11px;font-weight:600;color:#a8a29e;text-transform:uppercase;letter-spacing:0.05em;">Fidelity</span>
+    <div id="fidelity-segments-toolbar" class="fidelity-segments-row" role="group">
+      <button type="button" class="fidelity-seg" data-profile="more_editable">More editable</button>
+      <button type="button" class="fidelity-seg active" data-profile="balanced">Balanced</button>
+      <button type="button" class="fidelity-seg" data-profile="more_faithful">More faithful</button>
+    </div>
+  </div>
   <iframe id="preview" src="/preview"></iframe>
   <div id="divider"></div>
   <div id="chat">
@@ -137,6 +184,32 @@ const builder = document.getElementById('builder');
 
 // --- URL submission → enter builder mode ---
 let _targetUrl = null;
+let _fidelityProfile = localStorage.getItem('fidelity_profile') || 'balanced';
+
+const _PROFILE_HINTS = {
+  more_editable: 'More editable: cleanest semantic HTML; placeholders OK for logos.',
+  balanced: 'Balanced: semantic HTML with strong layout and visual match (default).',
+  more_faithful: 'More faithful: mirrors logo/hero assets locally; asset_coverage enforced.',
+};
+
+const _PROFILE_ALIASES = { editable: 'more_editable', faithful: 'more_faithful' };
+
+function setFidelityProfile(profile) {
+  if (_PROFILE_ALIASES[profile]) profile = _PROFILE_ALIASES[profile];
+  if (!['more_editable', 'balanced', 'more_faithful'].includes(profile)) profile = 'balanced';
+  _fidelityProfile = profile;
+  localStorage.setItem('fidelity_profile', profile);
+  document.querySelectorAll('.fidelity-seg').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.profile === profile);
+  });
+  const hint = document.getElementById('fidelity-hint');
+  if (hint) hint.textContent = _PROFILE_HINTS[profile] || '';
+}
+
+document.querySelectorAll('.fidelity-seg').forEach(btn => {
+  btn.addEventListener('click', () => setFidelityProfile(btn.dataset.profile));
+});
+setFidelityProfile(_fidelityProfile);
 
 document.getElementById('url-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -288,7 +361,12 @@ function connectSSE() {
       await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, url: _targetUrl, session_id: window._sessionId }),
+        body: JSON.stringify({
+          message: text,
+          url: _targetUrl,
+          session_id: window._sessionId,
+          fidelity_profile: _fidelityProfile,
+        }),
       });
     } catch (err) {
       if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();

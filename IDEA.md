@@ -4,7 +4,7 @@
 >
 > This file is the product + design + engineering plan. Use it for APPROACH.md and for build work.
 >
-> **Supporting docs**: `[docs/ADR.md](docs/ADR.md)` (architecture decisions), `[docs/INTERVIEW.md](docs/INTERVIEW.md)` (interview prep by phase).
+> **Supporting docs**: [`docs/ADR.md`](docs/ADR.md) (architecture decisions), [`docs/INTERVIEW.md`](docs/INTERVIEW.md) (interview prep by phase), [`docs/phase-1-visual-loop.md`](docs/phase-1-visual-loop.md) (Phase 1 plan + implementation map), [`docs/phase-2-fidelity.md`](docs/phase-2-fidelity.md) (Phase 2 fidelity scoring + thresholds).
 
 ---
 
@@ -408,6 +408,10 @@ flowchart TD
 - **S2.5 `fidelity_report()` aggregator**: Weighted total (suggest content 0.30, structure 0.20, layout 0.30, visual 0.20) with a per-axis breakdown and a ranked list of **worst sections**. Thresholds (tunable in `data/`): pass ≥ 0.85, warn 0.70–0.85, fail < 0.70; hard sub-gates e.g. text coverage ≥ 0.95, landmark order exact.
 - **S2.6 `compare_to_target()` tool**: New tool in `tools.py` that caches the target capture for the session, runs `compare.py` against current `output/index.html`, and returns the report JSON (+ optional diff image block). Register in `TOOL_HANDLERS`.
 - **S2.7 Loop + gate integration**: Update `SYSTEM_PROMPT` so step 3 calls `compare_to_target()` and fixes the **named worst sections**; stop when total ≥ pass or max iters hit. Add a batch script that writes a per-site, per-axis report into `data/`.
+- **S2.8 Fidelity knob (implemented)**: UI 3-segment control (**more_editable / balanced / more_faithful**); `fidelity_profile` on `/chat` drives prompt + compare. Default **balanced**. ADR [`0007`](docs/ADR.md#adr-0007).
+- **S2.9 Asset mirroring (implemented)**: `extract_assets(url)` + `asset_coverage` (enforced in **more_faithful** only). ADR [`0008`](docs/ADR.md#adr-0008).
+
+**Interview / ADR**: [`docs/INTERVIEW.md#interview-phase-2`](docs/INTERVIEW.md#interview-phase-2) · [`docs/phase-2-fidelity.md`](docs/phase-2-fidelity.md)
 
 **Test points / exit criteria**
 

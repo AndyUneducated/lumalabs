@@ -33,6 +33,7 @@ class CaptureResult:
 
     paths: list[Path] = field(default_factory=list)
     styles: dict | None = None
+    compare_payload: dict | None = None
     dom_only: bool = False
     error: str | None = None
     source: str = ""
@@ -193,18 +194,106 @@ _EXTRACT_STYLES_JS = """
 """
 
 
+_EXTRACT_COMPARE_JS = """
+() => {
+  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
+  const vw = window.innerWidth || 1280;
+  const scrollH = Math.max(
+    document.body ? document.body.scrollHeight : 0,
+    document.documentElement ? document.documentElement.scrollHeight : 0,
+    window.innerHeight
+  );
+
+  const text = [];
+  const seen = new Set();
+  const textSel = 'h1, h2, h3, h4, p, li, button, a, label, span';
+  for (const el of document.querySelectorAll(textSel)) {
+    if (text.length >= 80) break;
+    const t = norm(el.innerText || el.textContent || '');
+    if (t.length < 3 || seen.has(t)) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 2 && rect.height < 2) continue;
+    seen.add(t);
+    text.push(t);
+  }
+
+  const skeletonTags = new Set([
+    'header', 'nav', 'main', 'section', 'footer',
+    'h1', 'h2', 'h3', 'button', 'a', 'img',
+  ]);
+  const skeleton = [];
+  const walk = (root) => {
+    const iter = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT);
+    let node;
+    while ((node = iter.nextNode()) && skeleton.length < 120) {
+      const tag = node.tagName.toLowerCase();
+      if (skeletonTags.has(tag) || node.hasAttribute('data-section')) {
+        skeleton.push(tag === 'img' ? 'img' : tag);
+      }
+    }
+  };
+  walk(document.body || document.documentElement);
+
+  const sections = [];
+  for (const el of document.querySelectorAll(
+    'header, nav, main, section, footer, [data-section]'
+  )) {
+    if (sections.length >= 24) break;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) continue;
+    const absY = rect.top + window.scrollY;
+    sections.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      box: {
+        x: rect.left / vw,
+        y: absY / scrollH,
+        w: rect.width / vw,
+        h: rect.height / scrollH,
+      },
+    });
+  }
+
+  return {
+    text,
+    skeleton,
+    sections,
+    viewport: { width: vw, scrollHeight: scrollH },
+  };
+}
+"""
+
+
 async def _extract_styles(page: Page) -> dict:
     return await page.evaluate(_EXTRACT_STYLES_JS)
 
 
+async def _extract_compare(page: Page) -> dict:
+    return await page.evaluate(_EXTRACT_COMPARE_JS)
+
+
 async def _navigate(page: Page, url: str) -> None:
-    await page.goto(url, wait_until="networkidle", timeout=NAV_TIMEOUT_MS)
+    # Heavy-JS sites often never reach "networkidle" due to long-polling.
+    await page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+    await asyncio.sleep(0.8)
 
 
 async def _capture_loaded_page(page: Page, source: str) -> CaptureResult:
     styles = await _extract_styles(page)
     paths = await _tile_screenshot(page, source)
     return CaptureResult(paths=paths, styles=styles, source=source)
+
+
+async def _capture_loaded_page_compare(page: Page, source: str) -> CaptureResult:
+    styles = await _extract_styles(page)
+    compare_payload = await _extract_compare(page)
+    paths = await _tile_screenshot(page, source)
+    return CaptureResult(
+        paths=paths,
+        styles=styles,
+        compare_payload=compare_payload,
+        source=source,
+    )
 
 
 async def capture_url(url: str) -> CaptureResult:
@@ -257,7 +346,7 @@ async def capture_file(file_path: Path) -> CaptureResult:
     async with _browser_lock:
         page = await _new_page()
         try:
-            await page.goto(file_url, wait_until="networkidle", timeout=NAV_TIMEOUT_MS)
+            await _navigate(page, file_url)
             return await _capture_loaded_page(page, file_url)
         except Exception as e:
             return CaptureResult(
@@ -266,5 +355,57 @@ async def capture_file(file_path: Path) -> CaptureResult:
                 error=str(e),
                 source=file_url,
             )
+        finally:
+            await page.context.close()
+
+
+async def capture_compare(source: str, *, is_file: bool = False) -> CaptureResult:
+    """Capture page for fidelity compare: tiles, styles, and compare payload."""
+    if is_file:
+        resolved = Path(source).resolve()
+        if not resolved.is_file():
+            return CaptureResult(
+                paths=[],
+                dom_only=True,
+                error=f"File not found: {resolved}",
+                source=str(resolved),
+            )
+        target = resolved.as_uri()
+    else:
+        target = source
+        if not target.startswith(("http://", "https://")):
+            target = "https://" + target.lstrip("/")
+
+    async with _browser_lock:
+        page = await _new_page()
+        try:
+            await _navigate(page, target)
+            return await _capture_loaded_page_compare(page, target)
+        except Exception as e:
+            try:
+                styles = await _extract_styles(page)
+                compare_payload = await _extract_compare(page)
+                outline = await page.evaluate(
+                    "() => document.body ? document.body.innerText.slice(0, 4000) : ''"
+                )
+                if compare_payload is not None:
+                    compare_payload = {**compare_payload, "textOutline": outline}
+                return CaptureResult(
+                    paths=[],
+                    styles={**(styles or {}), "textOutline": outline},
+                    compare_payload=compare_payload,
+                    dom_only=True,
+                    error=str(e),
+                    source=target,
+                )
+            except Exception as inner:
+                return CaptureResult(
+                    paths=[],
+                    styles=None,
+                    compare_payload=None,
+                    dom_only=True,
+                    error=f"{e}; fallback failed: {inner}",
+                    source=target,
+                )
         finally:
             await page.context.close()

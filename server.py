@@ -85,6 +85,7 @@ def _notify(event: str = "update") -> None:
 async def lifespan(app: FastAPI):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     Path("data").mkdir(parents=True, exist_ok=True)
+    _seed_fidelity_config()
     from tools import set_notify_fn
     set_notify_fn(_notify)
     _load_sessions()
@@ -92,6 +93,16 @@ async def lifespan(app: FastAPI):
     yield
     from browser import close_browser
     await close_browser()
+
+
+def _seed_fidelity_config() -> None:
+    """Write default fidelity thresholds if data/fidelity.json is missing."""
+    path = Path("data/fidelity.json")
+    if path.is_file():
+        return
+    from compare import default_config
+
+    path.write_text(json.dumps(default_config(), indent=2) + "\n")
 
 
 app = FastAPI(title="Website Builder", lifespan=lifespan)
@@ -141,48 +152,109 @@ async def preview():
     )
 
 
+@app.get("/assets/{asset_path:path}")
+async def serve_asset(asset_path: str):
+    """Serve mirrored assets from output/assets/ for faithful previews."""
+    base = Path("output") / "assets"
+    file_path = (base / asset_path).resolve()
+    if not str(file_path).startswith(str(base.resolve())):
+        return HTMLResponse("Forbidden", status_code=403)
+    if file_path.is_file():
+        return FileResponse(file_path, headers={"Cache-Control": "no-store"})
+    return HTMLResponse("Not found", status_code=404)
+
+
 # --- Chat (agent) ---
 
-SYSTEM_PROMPT = """\
+_PROFILE_BUILD_RULES = {
+    "more_editable": """\
+**Fidelity profile: more_editable** — prioritize clean, semantic, easy-to-change code.
+- Use semantic tags (`header`, `nav`, `main`, `section`, `footer`, `h1`–`h3`). \
+Avoid deep div nesting; do not mirror the source site's machine-generated DOM.
+- Match layout, colors, typography, and spacing from screenshots — but keep HTML readable.
+- Use CSS variables in `:root`; no inline styles on every element.
+- Use styled wordmark placeholders for logos (do not mirror proprietary image files).
+- Self-check with `compare_to_target(url, profile="more_editable")`. Low structure score is \
+expected and OK; asset_coverage is informational only.""",
+    "balanced": """\
+**Fidelity profile: balanced** (default) — semantic HTML with strong layout/visual match.
+- Prefer semantic tags; add wrapper `div`s only when needed for layout fidelity.
+- Match colors, fonts, spacing, and section rhythm from the capture.
+- Use CSS variables in `:root`; no frameworks.
+- Logo placeholders are OK; asset_coverage is informational only.
+- Self-check with `compare_to_target(url, profile="balanced")`. Fix `worst_sections` \
+and `gate_failures`; structure score is informational.""",
+    "more_faithful": """\
+**Fidelity profile: more_faithful** — closest visual match including real assets.
+- **Mandatory order**: `capture_site(url)` → `extract_assets(url)` → `write_html`. Never skip \
+`extract_assets` in this profile.
+- Use **every** entry in manifest `assets` via its `preview_path`:
+  - **logo / favicon / hero**: `<img src="/assets/...">`, `<link rel="icon" href="/assets/...">`, \
+or `background-image: url("/assets/...")` when the source used a background image.
+  - **inline SVG** (manifest `hints.inline_svg` or `type: inline_svg`): reference as \
+`<img src="/assets/...-inline-....svg">` — never replace with a text wordmark or emoji.
+  - **fonts** (manifest `fonts` / `hints.font_faces`): paste the provided `@font-face` rules into \
+`<style>` and set `body` / headings to the mirrored `font-family` names.
+- **Forbidden** when manifest has logo or inline_svg: CSS wordmark placeholders, generic icons, \
+or "LOGO" text substitutes.
+- Match section positions, spacing, colors, and typography as closely as pixels allow.
+- Wrapper `div`s are allowed when they improve layout fidelity.
+- Prefer a single `<style>` block with `:root` CSS variables.
+- Self-check with `compare_to_target(url, profile="more_faithful")`. \
+`asset_coverage` is enforced (≥75%) — logo, favicon, hero, and primary font when present.""",
+}
+
+_SYSTEM_PROMPT_BASE = """\
 You are an AI agent that creates customizable website templates from existing sites.
 
 The user gives you a URL of a site they love. Your job is to recreate it as \
 clean, editable HTML/CSS that looks and feels almost exactly like the original — \
-same layout, same colors, same typography, same visual rhythm — but with clean \
-code that's easy to customize.
+same layout, same colors, same typography, same visual rhythm — but with code \
+the user can customize.
 
-You have tools to capture screenshots, write and read HTML, and screenshot your \
-own output. The user sees a live preview of your HTML.
+You have tools to capture screenshots, compare fidelity to the target, write and \
+read HTML, and screenshot your own output. The user sees a live preview of your HTML.
 
 When the user gives you a URL, follow this workflow strictly:
 
-1. **Look first** — call `capture_site(url)` before writing any HTML. Study the \
-screenshot tiles (top to bottom) and the extracted styles JSON. Match what you \
-see in the pixels, not what you guess from memory.
+1. **Look first** — call `capture_site(url)` before writing any HTML. For **more_faithful**, \
+also call `extract_assets(url)` and use mirrored files from the manifest.
 
-2. **Build** — call `write_html` with clean semantic HTML and a <style> block. \
-Use the real colors, fonts, spacing, and layout from the capture. No frameworks, \
-no inline styles on every element.
+2. **Build** — call `write_html` following the fidelity profile rules below.
 
-3. **Self-check** — call `screenshot_output()` and compare your output to the \
-target screenshots. Fix the biggest visual gaps (layout, colors, typography, \
-spacing, hero, CTA).
+3. **Self-check** — call `compare_to_target(url, profile=...)` with the user's profile. \
+Read the fidelity report: fix the **named worst_sections** first (not a full rewrite). \
+If `gate_failures` lists content/layout issues, fix those before cosmetic tweaks. \
+Optionally call `screenshot_output()` when you need a visual sanity check.
 
-4. **Iterate** — repeat steps 2–3 at most 2–3 times, then stop and summarize \
-what you matched and what still differs.
+4. **Iterate** — repeat steps 2–3 at most 2–3 times. Stop when `verdict` is \
+`pass`, or when you hit the iteration cap — then summarize per-axis scores and \
+any remaining gaps from `worst_sections`.
 
 For follow-up edits (no new URL), use `read_html`, make focused changes, and \
 optionally `screenshot_output()` to verify.
 
 If `capture_site` returns a DOM-only fallback (no images), use the style JSON \
 and text outline; do not invent a generic template.
+
+{profile_rules}
 """
+
+
+def _build_system_prompt(profile: str) -> str:
+    from compare import resolve_profile
+
+    prof = resolve_profile(profile)
+    return _SYSTEM_PROMPT_BASE.format(profile_rules=_PROFILE_BUILD_RULES[prof])
 
 
 _agent_lock = asyncio.Lock()
 
 
-def _build_agent_options(resume_session: str | None = None):
+def _build_agent_options(
+    resume_session: str | None = None,
+    fidelity_profile: str = "balanced",
+):
     import sys
     from claude_agent_sdk import ClaudeAgentOptions
     from tools import create_tool_server, TOOL_NAMES, SERVER_NAME
@@ -192,10 +264,14 @@ def _build_agent_options(resume_session: str | None = None):
     cs = create_tool_server()
     mcp_tool_names = [f"mcp__{SERVER_NAME}__{name}" for name in TOOL_NAMES]
 
-    print(f"[agent] Tools: {mcp_tool_names}, resume={resume_session}", file=sys.stderr)
+    print(
+        f"[agent] Tools: {mcp_tool_names}, resume={resume_session}, "
+        f"profile={fidelity_profile}",
+        file=sys.stderr,
+    )
 
     return ClaudeAgentOptions(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=_build_system_prompt(fidelity_profile),
         permission_mode="acceptEdits",
         model=AGENT_MODEL,
         mcp_servers={SERVER_NAME: cs},
@@ -246,6 +322,27 @@ class ChatRequest(BaseModel):
     message: str
     url: str | None = None
     session_id: str | None = None
+    fidelity_profile: str = "balanced"
+
+
+@app.get("/fidelity/profiles")
+async def fidelity_profiles():
+    from compare import load_config
+
+    cfg = load_config()
+    profiles = cfg.get("profiles", {})
+    return {
+        "default": "balanced",
+        "profiles": [
+            {
+                "id": pid,
+                "label": pdata.get("label", pid),
+                "description": pdata.get("description", ""),
+            }
+            for pid, pdata in profiles.items()
+            if pid in ("more_editable", "balanced", "more_faithful")
+        ],
+    }
 
 
 @app.get("/chat/status")
@@ -258,7 +355,14 @@ _background_tasks: set = set()
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    task = asyncio.create_task(_run_agent(req.message, url=req.url, session_id=req.session_id))
+    task = asyncio.create_task(
+        _run_agent(
+            req.message,
+            url=req.url,
+            session_id=req.session_id,
+            fidelity_profile=req.fidelity_profile,
+        )
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     task.add_done_callback(_task_done)
@@ -274,16 +378,27 @@ def _task_done(task):
         _push_chat({"type": "error", "text": str(task.exception())})
 
 
-async def _run_agent(message: str, url: str | None = None, session_id: str | None = None):
+async def _run_agent(
+    message: str,
+    url: str | None = None,
+    session_id: str | None = None,
+    fidelity_profile: str = "balanced",
+):
     global _agent_busy
     async with _agent_lock:
         _agent_busy = True
         try:
             import sys
             from claude_agent_sdk import ClaudeSDKClient
+            from compare import resolve_profile
+            from tools import set_fidelity_profile
 
+            prof = set_fidelity_profile(fidelity_profile)
             os.environ.pop("CLAUDECODE", None)
-            opts = _build_agent_options(resume_session=session_id)
+            opts = _build_agent_options(
+                resume_session=session_id,
+                fidelity_profile=prof,
+            )
 
             print(f"[agent] Starting (resume={session_id}): {message[:80]}", file=sys.stderr)
 
@@ -308,7 +423,11 @@ async def _run_agent(message: str, url: str | None = None, session_id: str | Non
                             _push_chat({"type": "session", "session_id": new_sid})
                             if new_sid not in _sessions:
                                 from datetime import datetime
-                                _sessions[new_sid] = {"url": url or "", "created": datetime.now().isoformat()}
+                                _sessions[new_sid] = {
+                                    "url": url or "",
+                                    "created": datetime.now().isoformat(),
+                                    "fidelity_profile": prof,
+                                }
                                 _save_sessions()
                             print(f"[agent] Session: {new_sid}", file=sys.stderr)
                             break
@@ -339,7 +458,11 @@ async def _run_agent(message: str, url: str | None = None, session_id: str | Non
                         _push_chat({"type": "session", "session_id": sid})
                         if sid not in _sessions:
                             from datetime import datetime
-                            _sessions[sid] = {"url": url or "", "created": datetime.now().isoformat()}
+                            _sessions[sid] = {
+                                "url": url or "",
+                                "created": datetime.now().isoformat(),
+                                "fidelity_profile": prof,
+                            }
                             _save_sessions()
 
             _push_chat({"type": "done"})

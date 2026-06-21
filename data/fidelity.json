@@ -1,0 +1,88 @@
+{
+  "weights": {
+    "content": 0.30,
+    "structure": 0.20,
+    "layout": 0.30,
+    "visual": 0.20,
+    "assets": 0.0
+  },
+  "thresholds": {
+    "pass": 0.85,
+    "warn": 0.70
+  },
+  "hard_gates": {
+    "text_coverage": 0.95,
+    "landmark_order_exact": false,
+    "min_block_iou": 0.30
+  },
+  "bands": {
+    "content": { "floor": 0.15, "ceil": 1.0 },
+    "structure": { "floor": 0.10, "ceil": 1.0 },
+    "layout": { "floor": 0.05, "ceil": 0.85 },
+    "visual": { "floor": 0.20, "ceil": 0.98 },
+    "assets": { "floor": 0.0, "ceil": 1.0 }
+  },
+  "profiles": {
+    "more_editable": {
+      "label": "More editable",
+      "description": "Cleanest code; semantic HTML only. Structure and assets scores are informational.",
+      "weights": {
+        "content": 0.35,
+        "structure": 0.0,
+        "layout": 0.25,
+        "visual": 0.40,
+        "assets": 0.0
+      },
+      "hard_gates": {
+        "text_coverage": 0.90,
+        "landmark_order_exact": false,
+        "min_block_iou": 0.25
+      },
+      "thresholds": {
+        "pass": 0.80,
+        "warn": 0.65
+      }
+    },
+    "balanced": {
+      "label": "Balanced",
+      "description": "Default: semantic HTML with layout/visual fidelity. Asset coverage is informational.",
+      "weights": {
+        "content": 0.30,
+        "structure": 0.05,
+        "layout": 0.35,
+        "visual": 0.30,
+        "assets": 0.0
+      },
+      "hard_gates": {
+        "text_coverage": 0.95,
+        "landmark_order_exact": false,
+        "min_block_iou": 0.30
+      },
+      "thresholds": {
+        "pass": 0.85,
+        "warn": 0.70
+      }
+    },
+    "more_faithful": {
+      "label": "More faithful",
+      "description": "Mirror logo/hero assets locally; asset_coverage enforced in compare.",
+      "weights": {
+        "content": 0.20,
+        "structure": 0.0,
+        "layout": 0.28,
+        "visual": 0.32,
+        "assets": 0.20
+      },
+      "hard_gates": {
+        "text_coverage": 0.95,
+        "landmark_order_exact": false,
+        "min_block_iou": 0.35,
+        "asset_coverage": 0.75
+      },
+      "thresholds": {
+        "pass": 0.82,
+        "warn": 0.68
+      }
+    }
+  }
+}
