@@ -15,6 +15,7 @@ All architecture decisions for this project live in this single file. Older numb
 | [0009](#adr-0009) | Design tokens: `:root` as source of truth + live edit | Phase 3 |
 | [0010](#adr-0010) | Partial edits + Code/Compare UI (Phase 4) | Phase 4 |
 | [0011](#adr-0011) | Output history: single write funnel + snapshot-before-write | Phase 5 |
+| [0012](#adr-0012) | Self-convergence tracking + A/B baseline via tool-restricted one-shot | Phase 6 |
 
 ---
 
@@ -490,6 +491,61 @@ Edits can come from the agent (`write_html`, `edit_section`, `set_design_token`)
 - **Impact**: `history.py`, four write call sites, four endpoints, History panel, `--generate` batch.
 - **Risk**: History grows; capped at 50 entries with oldest file deletion.
 - **Limit**: single-file history only; no branching.
+
+---
+
+<a id="adr-0012"></a>
+
+## ADR 0012 — Self-convergence tracking + A/B baseline
+
+- **Status**: Accepted
+- **Date**: 2026-06-21
+- **Phase**: Phase 6
+
+### Context
+
+The README's bar is "better than what an AI would produce on its own with
+minimal guidance." We already run a look → measure → fix loop, but the value was
+invisible: scores lived only in chat text. We needed to *show* the agent
+correcting itself, and to *quantify* the loop vs a naked one-shot.
+
+### Decision
+
+- **Record every `compare_to_target` as a round** of an active run, keyed per
+  session in `data/convergence.json`. The agent lock serializes runs, so a
+  module-global active run is safe.
+- **Insights view** draws the score curve, first→final delta, and per-round
+  `worst_sections` (struck when resolved next round); refreshes live over a new
+  SSE `convergence` event.
+- **A/B baseline** (`POST /ab`) reuses the agent with a **restricted tool set**
+  (`capture_site` + `write_html`) and a "one shot, no self-check" prompt, scores
+  it, stores it as baseline, then **restores** the user's loop output.
+
+### Rationale
+
+- The first round of the real run is the honest "first build" number; the last
+  round is post-iteration — the delta is free, real evidence (no extra cost).
+- A true A/B (separate naked run) is opt-in because it costs an extra agent run;
+  restoring output afterward keeps it non-destructive.
+- Reusing `_build_agent_options` with a tool subset avoids a second code path.
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Show scores in chat only | No new code | Invisible, not persuasive | Superseded |
+| Reconstruct rounds from history snapshots | No live hook | Needs re-capture/scoring per snapshot | Not chosen |
+| Always run naked A/B every build | Strongest proof | Doubles API cost/time | Made opt-in |
+| Per-round record + opt-in A/B | Cheap, live, honest | Active-run global state | **Chosen** |
+
+### Consequences and risks
+
+- **Impact**: new `convergence.py`, `compare_to_target` hook, `_run_agent`
+  begin/end, `/convergence` + `/ab` endpoints, `_build_agent_options` tool
+  subset, Insights view, [`docs/phase-6-self-convergence.md`](phase-6-self-convergence.md), `scripts/verify_phase6.py`.
+- **Risk**: active-run global assumes one run at a time (true under the agent
+  lock). A/B baseline depends on a live Claude run; failures return a friendly
+  error and never clobber the saved output.
 
 ---
 

@@ -4,7 +4,7 @@
 >
 > This file is the product + design + engineering plan. Use it for APPROACH.md and for build work.
 >
-> **Supporting docs**: [`docs/ADR.md`](docs/ADR.md) (architecture decisions), [`docs/INTERVIEW.md`](docs/INTERVIEW.md) (interview prep by phase), [`docs/phase-1-visual-loop.md`](docs/phase-1-visual-loop.md) (Phase 1 plan + implementation map), [`docs/phase-2-fidelity.md`](docs/phase-2-fidelity.md) (Phase 2 fidelity scoring + thresholds), [`docs/phase-3-tokens.md`](docs/phase-3-tokens.md) (Phase 3 design tokens), [`docs/phase-4-edits-compare.md`](docs/phase-4-edits-compare.md) (Phase 4 edits + Code + Compare).
+> **Supporting docs**: [`docs/ADR.md`](docs/ADR.md) (architecture decisions), [`docs/INTERVIEW.md`](docs/INTERVIEW.md) (interview prep by phase), [`docs/phase-1-visual-loop.md`](docs/phase-1-visual-loop.md) (Phase 1 plan + implementation map), [`docs/phase-2-fidelity.md`](docs/phase-2-fidelity.md) (Phase 2 fidelity scoring + thresholds), [`docs/phase-3-tokens.md`](docs/phase-3-tokens.md) (Phase 3 design tokens), [`docs/phase-4-edits-compare.md`](docs/phase-4-edits-compare.md) (Phase 4 edits + Code + Compare), [`docs/phase-6-self-convergence.md`](docs/phase-6-self-convergence.md) (Phase 6 convergence + A/B).
 
 ---
 
@@ -272,7 +272,7 @@ Each Phase below uses the same four-part shape so it is easy to read and to defe
 3. **Technical approach** — diagrams + the small steps (`SX.Y`). Rule still holds: **one small change, 1–2 files when possible, easy to verify, app still runs.**
 4. **Test points / exit criteria** — how we prove the phase is done before we move on.
 
-Phases 0–4 are core (baseline → visual → fidelity → tokens → small edits + compare UI). Phase 5 boosts score (reliability). Phases 6–7 are bonus (fine-tune + deploy).
+Phases 0–4 are core (baseline → visual → fidelity → tokens → small edits + compare UI). Phases 5–6 boost score (reliability; self-convergence + A/B proof). Phase 7 is bonus (deploy); Phase 8 is future (fine-tune).
 
 ---
 
@@ -546,35 +546,49 @@ flowchart TD
 
 ---
 
-### Phase 6 — (Bonus) Small-model fine-tuning (can run in parallel)
+### Phase 6 — Self-convergence + A/B proof (implemented)
 
-**Goal**: Show ML depth in one small, sharp slice of the pipeline.
+> **Docs**: [`docs/phase-6-self-convergence.md`](docs/phase-6-self-convergence.md) · [`docs/INTERVIEW.md#interview-phase-6`](docs/INTERVIEW.md#interview-phase-6) · [ADR 0012](docs/ADR.md#adr-0012)
+
+**Goal**: Make the agent's self-correction **visible and measurable** — the
+strongest evidence that look → measure → fix beats a single naked generation
+(the README's "better than what an AI would produce on its own").
 
 **Features / user stories**
 
-- As a reviewer, I see a “before vs after fine-tune” demo on one focused task.
+- As a reviewer, I watch the fidelity score climb across the agent's own
+  `compare_to_target` rounds and see which `worst_sections` it fixed each round.
+- As a reviewer, I run an A/B: an unguided one-shot build vs the full loop, and
+  see the score gap.
 
 **Technical approach**
 
 ```mermaid
 flowchart LR
-    PICK[pick one task<br/>token extract / HTML clean / section parse] --> SCHEMA[define I/O schema]
-    SCHEMA --> DATA[dataset: benchmark sites + main-agent labels]
-    DATA --> TRAIN[LoRA on Qwen2.5-0.5B/1.5B]
-    TRAIN --> EVAL[eval vs zero-shot baseline]
-    EVAL --> WIRE[optional tool in pipeline]
+    AGENT[agent self-checks] --> REC[convergence.record_round]
+    REC --> STORE[(data/convergence.json<br/>per session)]
+    STORE --> SSE[SSE convergence event]
+    SSE --> INSIGHTS[Insights view<br/>curve + rounds + delta]
+    ABBTN[Run A/B baseline] --> NAKED[restricted one-shot agent<br/>capture_site + write_html only]
+    NAKED --> SCORE[score + restore output] --> STORE
 ```
 
-- **S6.1 Pick one task + I/O schema**: Token extract vs HTML cleanup vs section parse.
-- **S6.2 Build dataset**: Benchmark sites + main-agent labels; spot-check by hand.
-- **S6.3 LoRA train**: Qwen2.5-0.5B/1.5B scale is enough to demo.
-- **S6.4 Eval + wire**: Metrics vs zero-shot baseline; optional tool in the pipeline.
+- **S6.1 Round capture**: every `compare_to_target` call appends one round
+  (total, verdict, per-axis normalized, `worst_sections`, `gate_failures`) to the
+  active run; runs persist per session.
+- **S6.2 Insights view**: headline delta (first build → final), score curve with
+  pass/warn threshold lines, and per-round `worst_sections` chips (struck =
+  resolved next round). Live-updates over SSE while the agent works.
+- **S6.3 A/B baseline**: `POST /ab` runs a tool-restricted, "one shot, no
+  self-check" agent for the same URL, scores it, stores it as the baseline, and
+  restores the user's loop result so the demo is not clobbered.
 
 **Test points / exit criteria**
 
-- Demo shows before vs after fine-tune on the chosen task.
-- Metric beats (or clearly compares to) the zero-shot baseline.
-- Risk: time-box hard; if unfinished, document “designed, not trained.”
+- `python scripts/verify_phase6.py` — round ordering, per-session persistence,
+  live active run, baseline store, empty-run guard.
+- After a real build, Insights shows a rising curve and a positive
+  first→final delta; A/B overlays the one-shot baseline.
 
 ---
 
@@ -616,6 +630,42 @@ flowchart LR
 
 ---
 
+### Phase 8 — (Future) Small-model fine-tuning
+
+> Moved after deploy: this is an ML depth bonus, lower priority than the
+> agentic-experience work in Phases 1–6. Document as "designed, not trained" if
+> unbuilt.
+
+**Goal**: Show ML depth in one small, sharp slice of the pipeline.
+
+**Features / user stories**
+
+- As a reviewer, I see a "before vs after fine-tune" demo on one focused task.
+
+**Technical approach**
+
+```mermaid
+flowchart LR
+    PICK[pick one task<br/>token extract / HTML clean / section parse] --> SCHEMA[define I/O schema]
+    SCHEMA --> DATA[dataset: benchmark sites + main-agent labels]
+    DATA --> TRAIN[LoRA on Qwen2.5-0.5B/1.5B]
+    TRAIN --> EVAL[eval vs zero-shot baseline]
+    EVAL --> WIRE[optional tool in pipeline]
+```
+
+- **S8.1 Pick one task + I/O schema**: Token extract vs HTML cleanup vs section parse.
+- **S8.2 Build dataset**: Benchmark sites + main-agent labels; spot-check by hand.
+- **S8.3 LoRA train**: Qwen2.5-0.5B/1.5B scale is enough to demo.
+- **S8.4 Eval + wire**: Metrics vs zero-shot baseline; optional tool in the pipeline.
+
+**Test points / exit criteria**
+
+- Demo shows before vs after fine-tune on the chosen task.
+- Metric beats (or clearly compares to) the zero-shot baseline.
+- Risk: time-box hard; if unfinished, document "designed, not trained."
+
+---
+
 ### Time box summary
 
 
@@ -627,8 +677,9 @@ flowchart LR
 | 3     | Design tokens                | 0.5–1 d   | Yes           |
 | 4     | Small edits + Code + compare | 1 d       | Yes           |
 | 5     | Reliability                  | 0.5–1 d   | Yes (score)   |
-| 6     | Fine-tune                    | —         | Bonus         |
+| 6     | Self-convergence + A/B       | 0.5 d     | Yes (score)   |
 | 7     | Deploy + API                 | 0.5 d     | Bonus (email) |
+| 8     | Fine-tune                    | —         | Future        |
 
 
 > Rule: **finish vertical slices first (Phase 0→1→2→3→4 each demoable), then harden (5), then bonus (6/7).** Prefer one small commit per step. If a phase slips, keep the main demo path and move cuts to APPROACH.md “Next.”

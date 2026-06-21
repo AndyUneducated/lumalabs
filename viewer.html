@@ -165,13 +165,13 @@
     display: flex; align-items: center; gap: 10px; padding: 10px 12px;
     background: var(--bg-elev); border-bottom: 1px solid var(--border); flex-shrink: 0;
   }
-  #compare-run {
+  #compare-run, #ab-run {
     padding: 6px 16px; font-size: 12px; background: var(--accent); color: var(--on-accent);
     border: none; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600;
     transition: background var(--ease);
   }
-  #compare-run:hover:not(:disabled) { background: var(--accent-hover); }
-  #compare-run:disabled { opacity: 0.5; cursor: default; }
+  #compare-run:hover:not(:disabled), #ab-run:hover:not(:disabled) { background: var(--accent-hover); }
+  #compare-run:disabled, #ab-run:disabled { opacity: 0.5; cursor: default; }
   #compare-status { font-size: 12px; color: var(--text-muted); }
   #compare-body { flex: 1; overflow-y: auto; padding: 14px; }
   .compare-scores {
@@ -255,6 +255,91 @@
   }
   .compare-issues ul { margin: 4px 0 0 18px; padding: 0; }
   #compare-heatmap { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+
+  /* Insights view (Phase 6: self-convergence + A/B) */
+  #insights-toolbar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: var(--bg-elev); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #insights-status { font-size: 12px; color: var(--text-muted); }
+  #insights-body { flex: 1; overflow-y: auto; padding: 14px; }
+  #insights-empty { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  #insights-empty code { font-family: var(--mono); color: var(--text-dim); }
+  .conv-headline {
+    display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .conv-stat {
+    flex: 1; min-width: 130px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 14px 16px;
+  }
+  .conv-stat .k { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .conv-stat .v { font-size: 26px; font-weight: 700; color: var(--text); margin-top: 4px; line-height: 1.1; }
+  .conv-stat .sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .conv-stat.delta-pos { border-color: var(--accent-border); background: var(--accent-soft); }
+  .conv-stat.delta-pos .v { color: var(--accent-hover); }
+  .conv-chart-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 14px 16px 8px; margin-bottom: 14px;
+  }
+  .conv-chart-title {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  .conv-chart svg { width: 100%; height: auto; display: block; }
+  .conv-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--text-dim); }
+  .conv-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .conv-legend i { width: 14px; height: 0; border-top-width: 2px; border-top-style: solid; display: inline-block; }
+  .conv-rounds { display: flex; flex-direction: column; gap: 8px; }
+  .conv-round {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .conv-round-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .conv-round-n { font-size: 12px; font-weight: 600; color: var(--text); }
+  .conv-round-total { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--text); }
+  .conv-verdict {
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: capitalize;
+  }
+  .conv-verdict.pass { background: rgba(86, 217, 138, 0.15); color: #86efac; }
+  .conv-verdict.warn { background: rgba(251, 146, 60, 0.16); color: #fdba74; }
+  .conv-verdict.fail { background: rgba(240, 97, 109, 0.16); color: var(--danger); }
+  .conv-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .conv-chip {
+    font-size: 10px; padding: 2px 8px; border-radius: 999px;
+    background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .conv-chip.resolved { background: rgba(86, 217, 138, 0.12); color: #86efac; border-color: rgba(86, 217, 138, 0.3); text-decoration: line-through; }
+  .conv-round-label { font-size: 10px; color: var(--text-muted); margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .conv-reasons { margin-top: 8px; }
+  .conv-reasons ul {
+    margin: 4px 0 0; padding-left: 16px; font-size: 11px; color: var(--text-dim); line-height: 1.5;
+  }
+  .conv-reasons li { margin-bottom: 3px; }
+  .conv-decisions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .conv-decision {
+    background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: var(--radius); padding: 10px 12px;
+  }
+  .conv-decision-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .conv-decision-tool {
+    font-size: 11px; font-weight: 600; color: var(--accent-hover);
+    font-family: var(--mono);
+  }
+  .conv-decision-args { font-size: 10px; color: var(--text-muted); }
+  .conv-decision-said { font-size: 11px; color: var(--text-dim); line-height: 1.45; margin-top: 4px; }
+  .conv-baseline-banner {
+    background: var(--accent-soft); border: 1px solid var(--accent-border);
+    border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 14px;
+  }
+  .conv-baseline-banner .title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .conv-baseline-banner .sub { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+  .conv-axis-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .conv-axis-pill {
+    font-size: 10px; padding: 3px 8px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+  }
 
   /* Right side panel (Chat | Tokens) */
   #side-divider {
@@ -462,6 +547,7 @@
         <button type="button" class="view-tab active" data-view="preview">Preview</button>
         <button type="button" class="view-tab" data-view="code">Code</button>
         <button type="button" class="view-tab" data-view="compare">Compare</button>
+        <button type="button" class="view-tab" data-view="insights">Insights</button>
         <button type="button" class="view-tab" data-view="history">History</button>
       </div>
       <div id="view-preview" class="view-panel active">
@@ -485,6 +571,19 @@
             Click Run compare to capture source vs output and show per-axis fidelity.
           </p>
           <div id="compare-results" style="display:none;"></div>
+        </div>
+      </div>
+      <div id="view-insights" class="view-panel">
+        <div id="insights-toolbar">
+          <button type="button" id="ab-run" title="Run an unguided one-shot build and compare">Run A/B baseline</button>
+          <span id="insights-status">Why the agent scored, fixed, and improved each round.</span>
+        </div>
+        <div id="insights-body">
+          <p id="insights-empty">
+            Run <strong>Run A/B baseline</strong> for a one-shot score, or ask the agent to build
+            a page — each <code>compare_to_target</code> round and tool decision is explained here.
+          </p>
+          <div id="insights-results" style="display:none;"></div>
         </div>
       </div>
       <div id="view-history" class="view-panel">
@@ -554,6 +653,7 @@ function setActiveView(name) {
   });
   if (name === 'code') loadCodeView();
   if (name === 'history' && window.loadHistoryPanel) window.loadHistoryPanel();
+  if (name === 'insights' && window.loadInsightsPanel) window.loadInsightsPanel();
   if (name === 'compare' && _targetUrl) {
     document.getElementById('compare-status').textContent =
       `Target: ${_targetUrl}`;
@@ -995,6 +1095,8 @@ function connectSSE() {
       loadTokensPanel();
       if (window.loadHistoryPanel) window.loadHistoryPanel();
       if (_activeView === 'code') loadCodeView();
+    } else if (data.event === 'convergence') {
+      if (window.loadInsightsPanel) window.loadInsightsPanel();
     }
   };
   es.onerror = () => {
@@ -1036,6 +1138,11 @@ function connectSSE() {
       // Store session ID in URL hash
       window._sessionId = data.session_id;
       history.replaceState(null, '', '#' + data.session_id);
+    } else if (data.type === 'session_reset') {
+      window._sessionId = null;
+      history.replaceState(null, '', location.pathname + location.search);
+      const note = data.text || 'Previous chat session expired. Starting fresh.';
+      showToast(note, false);
     } else if (data.type === 'error') {
       if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
       const raw = (data.text != null ? String(data.text) : '').trim();
@@ -1092,6 +1199,243 @@ function connectSSE() {
       e.preventDefault();
       const text = input.value.trim();
       if (text) { input.value = ''; sendChatMessage(text); }
+    }
+  });
+}
+
+// --- Insights view (Phase 6: self-convergence + A/B) ---
+{
+  const body = document.getElementById('insights-body');
+  const empty = document.getElementById('insights-empty');
+  const results = document.getElementById('insights-results');
+  const statusEl = document.getElementById('insights-status');
+  const abBtn = document.getElementById('ab-run');
+
+  const pct = (v) => (v == null ? '—' : Math.round(v * 100) + '%');
+
+  // Pick the most recent run: prefer the in-progress one, else last persisted.
+  function pickRun(state) {
+    if (state.active && state.active.rounds && state.active.rounds.length) return state.active;
+    const runs = state.runs || [];
+    return runs.length ? runs[runs.length - 1] : null;
+  }
+
+  function lineChart(totals, baseline) {
+    const W = 560, H = 200, padL = 34, padR = 12, padT = 14, padB = 26;
+    const n = totals.length;
+    const x = (i) => padL + (n <= 1 ? 0 : (i * (W - padL - padR)) / (n - 1));
+    const y = (v) => padT + (1 - v) * (H - padT - padB);
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(g =>
+      `<line x1="${padL}" y1="${y(g)}" x2="${W - padR}" y2="${y(g)}" stroke="var(--border)" stroke-width="1"/>` +
+      `<text x="${padL - 6}" y="${y(g) + 3}" text-anchor="end" font-size="9" fill="var(--text-muted)">${Math.round(g * 100)}</text>`
+    ).join('');
+    const thr = (val, color) => val == null ? '' :
+      `<line x1="${padL}" y1="${y(val)}" x2="${W - padR}" y2="${y(val)}" stroke="${color}" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>`;
+    const baseLine = baseline == null ? '' :
+      `<line x1="${padL}" y1="${y(baseline)}" x2="${W - padR}" y2="${y(baseline)}" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="2 3"/>` +
+      `<text x="${W - padR}" y="${y(baseline) - 4}" text-anchor="end" font-size="9" fill="var(--text-muted)">one-shot ${pct(baseline)}</text>`;
+    const pts = totals.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+    const dots = totals.map((v, i) =>
+      `<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="var(--accent)"/>` +
+      `<text x="${x(i)}" y="${y(v) - 8}" text-anchor="middle" font-size="9" fill="var(--text)">${pct(v)}</text>` +
+      `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--text-muted)">R${i + 1}</text>`
+    ).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      ${grid}${thr(0.85, '#86efac')}${thr(0.70, '#fdba74')}${baseLine}
+      <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+  }
+
+  function reasonsBlock(items, title) {
+    if (!items || !items.length) return '';
+    return `<div class="conv-reasons">
+      <div class="conv-round-label">${title}</div>
+      <ul>${items.map(r => `<li>${escapeHtml(String(r))}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  function axisPills(axes) {
+    if (!axes || typeof axes !== 'object') return '';
+    const pills = Object.entries(axes).map(([k, v]) =>
+      `<span class="conv-axis-pill">${escapeHtml(k)} ${pct(v)}</span>`
+    ).join('');
+    return pills ? `<div class="conv-axis-row">${pills}</div>` : '';
+  }
+
+  function decisionsForRound(decisions, roundIndex) {
+    return (decisions || []).filter(d => d.after_round === roundIndex);
+  }
+
+  function renderDecisionCards(decisions) {
+    if (!decisions || !decisions.length) return '';
+    return decisions.map(d => `
+      <div class="conv-decision">
+        <div class="conv-decision-head">
+          <span class="conv-decision-tool">${escapeHtml(d.tool || '?')}</span>
+          ${d.args ? `<span class="conv-decision-args">${escapeHtml(d.args)}</span>` : ''}
+        </div>
+        ${d.agent_said ? `<div class="conv-decision-said">"${escapeHtml(d.agent_said)}"</div>` : ''}
+      </div>`).join('');
+  }
+
+  function renderBaselinePanel(baseline, hasRuns) {
+    if (!baseline) return '';
+    return `
+      <div class="conv-baseline-banner">
+        <div class="title">One-shot baseline (A/B) — ${pct(baseline.total)} · ${escapeHtml(baseline.verdict || '—')}</div>
+        <div class="sub">Unguided build: capture once, write once, no self-check loop. ${
+          hasRuns
+            ? 'Dashed line on the chart is this score; guided loop rounds are above it.'
+            : 'Ask the agent to build with compare_to_target rounds to see if the loop beats this.'
+        }</div>
+        ${axisPills(baseline.axes)}
+        ${reasonsBlock(baseline.reasons, 'Why this score')}
+      </div>`;
+  }
+
+  function render(state) {
+    const run = pickRun(state);
+    const baseline = state.baseline;
+    const hasRuns = !!(run && run.rounds && run.rounds.length);
+    const decisions = (run && run.decisions) || [];
+
+    if (!hasRuns && !baseline) {
+      empty.style.display = 'block';
+      results.style.display = 'none';
+      results.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+    results.style.display = 'block';
+
+    if (!hasRuns) {
+      results.innerHTML = renderBaselinePanel(baseline, false);
+      return;
+    }
+
+    const rounds = run.rounds;
+    const totals = rounds.map(r => r.total).filter(v => v != null);
+    const first = totals[0], last = totals[totals.length - 1];
+    const delta = (first != null && last != null) ? last - first : null;
+    const baseTotal = baseline ? baseline.total : null;
+    const abDelta = (baseTotal != null && last != null) ? last - baseTotal : null;
+
+    const headline = `
+      <div class="conv-headline">
+        <div class="conv-stat">
+          <div class="k">First build</div>
+          <div class="v">${pct(first)}</div>
+          <div class="sub">round 1 self-check</div>
+        </div>
+        <div class="conv-stat">
+          <div class="k">Final</div>
+          <div class="v">${pct(last)}</div>
+          <div class="sub">${rounds.length} round${rounds.length > 1 ? 's' : ''}, verdict ${rounds[rounds.length - 1].verdict || '—'}</div>
+        </div>
+        <div class="conv-stat ${delta > 0 ? 'delta-pos' : ''}">
+          <div class="k">Self-correction</div>
+          <div class="v">${delta == null ? '—' : (delta >= 0 ? '+' : '') + Math.round(delta * 100) + '%'}</div>
+          <div class="sub">score change across rounds</div>
+        </div>
+        ${baseTotal != null ? `
+        <div class="conv-stat ${abDelta > 0 ? 'delta-pos' : ''}">
+          <div class="k">vs one-shot (A/B)</div>
+          <div class="v">${abDelta == null ? '—' : (abDelta >= 0 ? '+' : '') + Math.round(abDelta * 100) + '%'}</div>
+          <div class="sub">loop vs naked ${pct(baseTotal)}</div>
+        </div>` : ''}
+      </div>`;
+
+    const chart = `
+      <div class="conv-chart-wrap">
+        <div class="conv-chart-title">Fidelity total per self-check round</div>
+        <div class="conv-chart">${lineChart(totals, baseTotal)}</div>
+        <div class="conv-legend">
+          <span><i style="border-color:var(--accent)"></i>total score</span>
+          <span><i style="border-color:#86efac"></i>pass 85%</span>
+          <span><i style="border-color:#fdba74"></i>warn 70%</span>
+          ${baseTotal != null ? '<span><i style="border-color:var(--text-muted)"></i>one-shot baseline</span>' : ''}
+        </div>
+      </div>`;
+
+    const decisionTimeline = decisions.length ? `
+      <div class="conv-chart-title" style="margin-bottom:8px;">Agent decisions (tool + stated reason)</div>
+      <div class="conv-decisions">${renderDecisionCards(decisions)}</div>` : '';
+
+    const roundCards = rounds.map((r, i) => {
+      const next = rounds[i + 1];
+      const resolved = next ? r.worst.filter(w => !next.worst.includes(w)) : [];
+      const chips = (r.worst || []).map(w => {
+        const done = resolved.includes(w);
+        return `<span class="conv-chip ${done ? 'resolved' : ''}">${escapeHtml(w)}</span>`;
+      }).join('') || '<span class="conv-chip">none flagged</span>';
+      const afterDecisions = renderDecisionCards(decisionsForRound(decisions, i));
+      const axisDelta = next && r.axes && next.axes ? Object.keys(r.axes).map(axis => {
+        const d = (next.axes[axis] || 0) - (r.axes[axis] || 0);
+        if (Math.abs(d) < 0.005) return null;
+        const sign = d >= 0 ? '+' : '';
+        return `${axis} ${sign}${Math.round(d * 100)}%`;
+      }).filter(Boolean) : [];
+      const improved = axisDelta.length
+        ? `<div class="conv-reasons"><div class="conv-round-label">What improved next round</div><ul>${axisDelta.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul></div>`
+        : '';
+      return `
+        <div class="conv-round">
+          <div class="conv-round-head">
+            <span class="conv-round-n">Round ${r.round}</span>
+            <span class="conv-verdict ${r.verdict || ''}">${r.verdict || '—'}</span>
+            <span class="conv-round-total">${pct(r.total)}</span>
+          </div>
+          ${axisPills(r.axes)}
+          ${reasonsBlock(r.reasons, 'Why this score')}
+          <div class="conv-round-label">Worst sections${next ? ' (struck = fixed next round)' : ''}</div>
+          <div class="conv-chips">${chips}</div>
+          ${improved}
+          ${afterDecisions ? `<div class="conv-round-label">Agent actions after this check</div>${afterDecisions}` : ''}
+        </div>`;
+    }).join('');
+
+    results.innerHTML =
+      (baseline ? renderBaselinePanel(baseline, true) : '') +
+      headline + chart + decisionTimeline +
+      `<div class="conv-chart-title" style="margin-bottom:8px;">Self-check rounds</div>` +
+      `<div class="conv-rounds">${roundCards}</div>`;
+  }
+
+  window.loadInsightsPanel = async function() {
+    const sid = window._sessionId || '';
+    try {
+      const res = await fetch('/convergence?session_id=' + encodeURIComponent(sid));
+      render(await res.json());
+    } catch (_) {}
+  };
+
+  abBtn.addEventListener('click', async () => {
+    if (!_targetUrl) { showToast('No target URL for this session.', true); return; }
+    if (!window._sessionId) { showToast('Generate a page first, then run A/B.', true); return; }
+    abBtn.disabled = true;
+    statusEl.textContent = 'Running unguided one-shot baseline… (~30–60s)';
+    try {
+      const res = await fetch('/ab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: _targetUrl, session_id: window._sessionId, profile: _fidelityProfile }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        statusEl.textContent = data.error;
+        showToast(data.error, true);
+      } else {
+        const b = data.baseline;
+        const score = b && b.total != null ? Math.round(b.total * 100) + '%' : '—';
+        statusEl.textContent = `A/B baseline captured (${score}). See details below.`;
+        setActiveView('insights');
+        window.loadInsightsPanel();
+      }
+    } catch (e) {
+      statusEl.textContent = 'A/B failed: ' + e.message;
+    } finally {
+      abBtn.disabled = false;
     }
   });
 }
@@ -1421,6 +1765,18 @@ connectSSE();
   if (!sessionId) loadSessions();
 
   if (sessionId) {
+    window._sessionId = sessionId;
+    fetch(`/chat/session/${encodeURIComponent(sessionId)}/resumable`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.resumable) {
+          window._sessionId = null;
+          history.replaceState(null, '', location.pathname + location.search);
+          showToast('Chat session expired — new messages start fresh.', false);
+        }
+      })
+      .catch(() => {});
+
     landing.classList.add('hidden');
     builder.classList.add('active');
     loadTokensPanel();

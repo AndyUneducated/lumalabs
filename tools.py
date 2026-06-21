@@ -8,11 +8,14 @@ To add a new tool: write an async function, add it to TOOL_HANDLERS.
 
 import base64
 import inspect
+import io
 import json
 import re
 import types
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
+
+from PIL import Image
 
 from assets import extract_assets_url, load_manifest
 from browser import CaptureResult, capture_compare, capture_file, capture_url, friendly_capture_error
@@ -197,11 +200,67 @@ def _normalize_tool_result(result: Any) -> dict:
     return {"content": [{"type": "text", "text": str(result)}]}
 
 
+# Claude Agent SDK JSON lines default to a 1 MiB read buffer; keep embedded images small.
+_MCP_IMAGE_BUDGET_BYTES = 600_000
+_MCP_IMAGE_MAX_WIDTH = 960
+
+
+def _encode_image_for_mcp(path: Path, *, max_width: int = _MCP_IMAGE_MAX_WIDTH) -> tuple[str, str]:
+    """Downscale and JPEG-compress a screenshot for MCP transport."""
+    with Image.open(path) as img:
+        img = img.convert("RGB")
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize(
+                (max_width, max(1, int(img.height * ratio))),
+                Image.Resampling.LANCZOS,
+            )
+        buf = io.BytesIO()
+        quality = 82
+        while quality >= 45:
+            buf.seek(0)
+            buf.truncate(0)
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            if buf.tell() <= 140_000:
+                break
+            quality -= 12
+            if quality < 45 and img.width > 480:
+                img = img.resize(
+                    (max(480, img.width // 2), max(1, img.height // 2)),
+                    Image.Resampling.LANCZOS,
+                )
+                quality = 82
+        data = base64.standard_b64encode(buf.getvalue()).decode("ascii")
+        return data, "image/jpeg"
+
+
 def _paths_to_image_blocks(paths: list[Path]) -> list[dict]:
-    blocks = []
+    blocks: list[dict] = []
+    budget = _MCP_IMAGE_BUDGET_BYTES
+    omitted: list[str] = []
     for path in paths:
-        data = base64.standard_b64encode(path.read_bytes()).decode("ascii")
-        blocks.append({"type": "image", "data": data, "mimeType": "image/png"})
+        if not path.is_file():
+            continue
+        try:
+            data, mime = _encode_image_for_mcp(path)
+        except OSError:
+            omitted.append(str(path))
+            continue
+        if len(data) > budget:
+            omitted.append(str(path))
+            continue
+        blocks.append({"type": "image", "data": data, "mimeType": mime})
+        budget -= len(data)
+    if omitted:
+        blocks.append(
+            {
+                "type": "text",
+                "text": (
+                    "Additional full-resolution tiles saved on disk (not embedded): "
+                    + ", ".join(omitted)
+                ),
+            }
+        )
     return blocks
 
 
@@ -340,9 +399,10 @@ async def run_fidelity_comparison(
     prof = resolve_profile(profile or _session_profile)
     normalized = _normalize_url(url)
 
-    if normalized not in _target_cache:
-        _target_cache[normalized] = await capture_compare(normalized, is_file=False)
-    target = _target_cache[normalized]
+    target = _target_cache.get(normalized)
+    if target is None or target.compare_payload is None:
+        target = await capture_compare(normalized, is_file=False)
+        _target_cache[normalized] = target
 
     if not OUTPUT_FILE.is_file():
         return {"error": "No output/index.html yet. Call write_html first."}
@@ -430,6 +490,12 @@ async def compare_to_target(url: str, profile: str | None = None):
 
     report = result["report"]
     prof = result.get("profile", prof)
+
+    # Phase 6: log this self-check as one convergence round, then nudge the UI.
+    import convergence
+    if convergence.record_round(report) is not None:
+        _notify("convergence")
+
     content: list[dict] = [
         {
             "type": "text",
@@ -444,9 +510,14 @@ async def compare_to_target(url: str, profile: str | None = None):
         heatmap_path = Path("output") / ".shots" / Path(heatmap).name
         if heatmap_path.is_file():
             content.append(
-                {"type": "text", "text": f"Diff heatmap saved to: {heatmap_path}"}
+                {
+                    "type": "text",
+                    "text": (
+                        f"Diff heatmap saved to: {heatmap_path} "
+                        "(open in the viewer Insights tab; not embedded to stay under SDK size limits)."
+                    ),
+                }
             )
-            content.extend(_paths_to_image_blocks([heatmap_path]))
 
     return {"content": content}
 

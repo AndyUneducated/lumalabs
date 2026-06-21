@@ -21,6 +21,7 @@ All per-phase “what we ship / why / how we verify” notes live in **this one 
 | Phase 2 | [#interview-phase-2](#interview-phase-2) |
 | Phase 4 | [#interview-phase-4](#interview-phase-4) |
 | Phase 5 | [#interview-phase-5](#interview-phase-5) |
+| Phase 6 | [#interview-phase-6](#interview-phase-6) |
 
 ---
 
@@ -401,3 +402,60 @@ How do we prove this phase’s definition of done?
 - `python scripts/verify_phase5.py` — snapshots, revert, diff, friendly errors.
 - Make an edit in the app → History panel shows an entry → Revert last restores preview.
 - `python scripts/fidelity_batch.py --generate` (optional; needs Claude CLI + API budget).
+
+---
+
+<a id="interview-phase-6"></a>
+
+## Phase 6 — Self-convergence + A/B proof (implemented)
+
+> Maps to [`IDEA.md`](../IDEA.md) Phase 6 · Plan: [`phase-6-self-convergence.md`](phase-6-self-convergence.md) · [ADR 0012](ADR.md#adr-0012)
+
+### What we ship
+
+1. **Convergence tracking** — every `compare_to_target` self-check appends a
+   round (total, verdict, per-axis normalized, `worst_sections`, `gate_failures`)
+   to the active run; persisted per session in `data/convergence.json`.
+2. **Insights view** — headline **first build → final** delta, a fidelity-per-round
+   curve with pass/warn threshold lines, and per-round `worst_sections` chips
+   (struck = resolved next round). Live-updates over a new SSE `convergence` event.
+3. **A/B baseline** — `POST /ab` runs a tool-restricted ("`capture_site` +
+   `write_html`, one shot, no self-check") agent for the same URL, scores it, and
+   overlays it as the one-shot baseline — then restores the user's loop result.
+4. **`scripts/verify_phase6.py`** — round ordering, per-session persistence, live
+   active run, baseline store, empty-run guard.
+
+### Key tech choices
+
+| Choice | Why | What we did not do | ADR |
+|--------|-----|---------------------|-----|
+| Per-round record keyed by session | Live curve + free first→final delta | Scores only in chat text | [`0012`](ADR.md#adr-0012) |
+| Active-run module global | Agent lock serializes runs | Thread/session plumbing | [`0012`](ADR.md#adr-0012) |
+| Opt-in A/B via restricted one-shot | True "naked vs loop" without doubling every build | Always run A/B | [`0012`](ADR.md#adr-0012) |
+| Restore output after A/B | Non-destructive demo | Leave naked build in place | [`0012`](ADR.md#adr-0012) |
+
+### Likely follow-up questions
+
+#### Q1: Is the "first build → final" delta real or staged?
+
+**Answer:** Real. Round 1 is the agent's first self-check (first build, pre-fix);
+the last round is post-iteration. Both come from actual `compare_to_target` calls
+in the run — no synthetic numbers.
+
+#### Q2: How is the A/B baseline a fair "naked AI"?
+
+**Answer:** We run the same model with only `capture_site` + `write_html` and a
+prompt that forbids self-check/iteration — that *is* "minimal guidance." We score
+that output, then restore the loop result so the demo isn't clobbered.
+
+#### Q3: Why per-session global state instead of a run id?
+
+**Answer:** The agent lock guarantees one run at a time, so a single active-run
+global is correct and simpler; it's tagged with the session id once detected and
+persisted under that key.
+
+### How we verify
+
+- `python scripts/verify_phase6.py` passes.
+- After a real build, Insights shows a rising curve and a positive first→final
+  delta; clicking **Run A/B baseline** overlays the one-shot line and the gap.
