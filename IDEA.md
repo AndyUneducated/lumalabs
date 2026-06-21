@@ -425,6 +425,8 @@ flowchart TD
 
 ### Phase 3 — Design tokens and customization
 
+> **Docs**: [`docs/phase-3-tokens.md`](docs/phase-3-tokens.md) (technical plan) · ADR [`0009`](docs/ADR.md#adr-0009)
+
 **Goal**: Make output look like the source **and** be easy to re-brand by changing a few variables.
 
 **Features / user stories**
@@ -444,10 +446,11 @@ flowchart LR
     ROOT --> PREVIEW[live preview re-renders]
 ```
 
-- **S3.1 `extract_design_tokens()`**: From computed styles, emit colors/fonts/sizes/radius/shadow/spacing JSON.
-- **S3.2 Generation uses CSS variables**: System prompt requires `:root { --brand … }`; site references vars.
-- **S3.3 Token read/write tools**: Read/write `:root` on the current output.
-- **S3.4 UI Design Tokens panel**: Right panel lists vars; edit → write back → live preview.
+- **S3.1 `extract_design_tokens()` + `tokens.py`**: Canonical token vocab; map computed styles → colors/fonts/sizes/radius/shadow/spacing JSON; `parse_root_vars` / `patch_root_vars`.
+- **S3.2 Generation uses CSS variables**: System prompt (all profiles) requires one `:root { --color-brand … }`; site references `var(--…)`; seed via `extract_design_tokens`.
+- **S3.3 Token read/write tools + endpoints**: `read_design_tokens` / `set_design_token` tools and `GET`/`POST /tokens` (panel, no LLM) — both patch the `:root` source of truth.
+- **S3.4 UI Design Tokens panel**: Collapsible right panel lists vars with color pickers; debounced write-back → `html_updated` → live preview.
+- **S3.5 Verify**: `scripts/verify_phase3.py` parse/patch round-trip + extraction unit checks.
 
 **Test points / exit criteria**
 

@@ -164,6 +164,38 @@ async def serve_asset(asset_path: str):
     return HTMLResponse("Not found", status_code=404)
 
 
+# --- Design tokens (panel, no LLM) ---
+
+
+class TokenUpdateRequest(BaseModel):
+    updates: dict[str, str]
+
+
+@app.get("/tokens")
+async def get_tokens():
+    from tokens import list_tokens_from_html
+
+    if not OUTPUT_FILE.is_file():
+        return {"tokens": []}
+    html = OUTPUT_FILE.read_text()
+    return {"tokens": list_tokens_from_html(html)}
+
+
+@app.post("/tokens")
+async def update_tokens(req: TokenUpdateRequest):
+    from tokens import list_tokens_from_html, parse_root_vars, patch_root_vars
+
+    if not OUTPUT_FILE.is_file():
+        return {"tokens": [], "error": "no output yet"}
+    html = OUTPUT_FILE.read_text()
+    if not parse_root_vars(html):
+        return {"tokens": [], "error": "no :root block in output/index.html"}
+    patched = patch_root_vars(html, req.updates)
+    OUTPUT_FILE.write_text(patched)
+    _notify("html_updated")
+    return {"tokens": list_tokens_from_html(patched)}
+
+
 # --- Chat (agent) ---
 
 _PROFILE_BUILD_RULES = {
@@ -212,15 +244,30 @@ clean, editable HTML/CSS that looks and feels almost exactly like the original �
 same layout, same colors, same typography, same visual rhythm — but with code \
 the user can customize.
 
-You have tools to capture screenshots, compare fidelity to the target, write and \
-read HTML, and screenshot your own output. The user sees a live preview of your HTML.
+You have tools to capture screenshots, extract design tokens, compare fidelity \
+to the target, write and read HTML, patch individual CSS variables, and \
+screenshot your own output. The user sees a live preview of your HTML.
+
+**Design tokens (required for every profile):**
+- Author exactly one `:root { }` block in `<style>` using these canonical names:
+  colors: --color-brand, --color-accent, --color-bg, --color-surface, --color-text, \
+--color-muted, --color-border
+  typography: --font-base, --font-heading, --text-base, --text-scale, --leading, \
+--weight-heading
+  shape: --radius, --radius-lg, --shadow
+  spacing: --space-unit, --space-section
+- Reference `var(--token)` for every color, font-family, font-size, border-radius, \
+and key spacing — **no repeated color/font literals** in rules.
+- For rebrand follow-ups ("make it purple"), prefer `set_design_token` over rewriting.
 
 When the user gives you a URL, follow this workflow strictly:
 
-1. **Look first** — call `capture_site(url)` before writing any HTML. For **more_faithful**, \
-also call `extract_assets(url)` and use mirrored files from the manifest.
+1. **Look first** — call `capture_site(url)` before writing any HTML. Then call \
+`extract_design_tokens(url)` and use the returned values to seed `:root`. For \
+**more_faithful**, also call `extract_assets(url)` and use mirrored files from the manifest.
 
-2. **Build** — call `write_html` following the fidelity profile rules below.
+2. **Build** — call `write_html` with `:root` tokens + `var(--…)` references, \
+following the fidelity profile rules below.
 
 3. **Self-check** — call `compare_to_target(url, profile=...)` with the user's profile. \
 Read the fidelity report: fix the **named worst_sections** first (not a full rewrite). \
@@ -231,8 +278,8 @@ Optionally call `screenshot_output()` when you need a visual sanity check.
 `pass`, or when you hit the iteration cap — then summarize per-axis scores and \
 any remaining gaps from `worst_sections`.
 
-For follow-up edits (no new URL), use `read_html`, make focused changes, and \
-optionally `screenshot_output()` to verify.
+For follow-up edits (no new URL), use `read_html` or `read_design_tokens`, make \
+focused changes, and optionally `screenshot_output()` to verify.
 
 If `capture_site` returns a DOM-only fallback (no images), use the style JSON \
 and text outline; do not invent a generic template.

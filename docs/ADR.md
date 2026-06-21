@@ -12,6 +12,7 @@ All architecture decisions for this project live in this single file. Older numb
 | [0006](#adr-0006) | Phase 2 fidelity: four-axis scoring + two-layer thresholds | Phase 2 |
 | [0007](#adr-0007) | Fidelity knob: more_editable / balanced / more_faithful profiles | Phase 2 |
 | [0008](#adr-0008) | Asset mirroring + asset_coverage (more_faithful only) | Phase 2 |
+| [0009](#adr-0009) | Design tokens: `:root` as source of truth + live edit | Phase 3 |
 
 ---
 
@@ -355,6 +356,49 @@ We did **not** add a separate "1:1 DOM clone" engine — all profiles share the 
 
 - **Impact**: `output/assets/` on disk; agent must call `extract_assets` before compare in more_faithful.
 - **Limit**: Cross-origin stylesheets may hide some `@font-face` rules; sprite sheets and canvas logos still out of scope.
+
+---
+
+<a id="adr-0009"></a>
+
+## 0009 — Design tokens: `:root` as source of truth + live edit
+
+- **Status**: Accepted
+- **Date**: 2026-06-20
+- **Phase**: Phase 3
+
+### Context
+
+Generation hard-codes colors/fonts, so "re-brand" means a full-file rewrite — slow, regression-prone, and not a real customization story. We need editable design tokens (Builder.io pattern: keep tokens, change token = rebrand) without a heavy design-system setup.
+
+### Decision
+
+1. The **`:root { --token: value }` block inside `output/index.html` is the single source of truth.** No sidecar `tokens.json` to drift.
+2. Add [`tokens.py`](../tokens.py): a **canonical token vocabulary** (`--color-brand`, `--font-base`, `--radius`, …) plus `extract_tokens_from_styles`, `parse_root_vars`, `patch_root_vars`, `categorize`, `rgb_to_hex`. Shared by tools and server.
+3. Tools: **`extract_design_tokens(url)`** (seed from capture), **`read_design_tokens()`**, **`set_design_token(name, value)`** (one-var patch, no rewrite).
+4. Endpoints **`GET /tokens`** / **`POST /tokens`** let the panel edit tokens **without the LLM** (string patch + `html_updated` reload).
+5. Prompt (all profiles): author one `:root` with canonical names and use `var(--…)` everywhere; seed via `extract_design_tokens`.
+6. UI: collapsible **Design Tokens panel** with color pickers; debounced write-back.
+
+### Rationale
+
+- One source of truth avoids HTML/JSON desync.
+- Panel edits skip the LLM → instant, deterministic, cheap; agent reserved for semantic edits.
+- Canonical names keep prompt, panel, and tools in agreement.
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Sidecar `tokens.json` + inject at render | Structured, queryable | Desyncs from edited HTML; extra build step | Not chosen |
+| Agent handles every token edit | No new endpoints | Slow, costly, non-deterministic for a color tweak | Not chosen |
+| `:root` source of truth + parse/patch | Minimal diff, instant panel edits, reusable by agent | Regex must edit one `:root` carefully | **Chosen** |
+
+### Consequences and risks
+
+- **Impact**: new `tokens.py`, two endpoints, three tools, a viewer panel; prompt requires `:root` + `var(--…)`.
+- **Risk**: `patch_root_vars` must target the first `:root` only and preserve the rest of the file; covered by `scripts/verify_phase3.py` round-trip tests.
+- **Limit**: single `:root` (no per-component themes / light-dark); spacing/shadow extraction is best-effort.
 
 ---
 

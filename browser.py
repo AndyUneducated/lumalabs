@@ -150,6 +150,8 @@ _EXTRACT_STYLES_JS = """
   const bcs = body ? getComputedStyle(body) : null;
   const btn = document.querySelector('a, button, [role="button"]');
   const btncs = btn ? getComputedStyle(btn) : null;
+  const card = document.querySelector('section, article, .card, [class*="card"]');
+  const cardcs = card ? getComputedStyle(card) : null;
 
   const sections = [];
   for (const el of document.querySelectorAll('section, header, footer, main, nav, [data-section]')) {
@@ -171,6 +173,7 @@ _EXTRACT_STYLES_JS = """
     typography: {
       bodyFontFamily: bcs ? bcs.fontFamily : null,
       bodyFontSize: bcs ? bcs.fontSize : null,
+      bodyLineHeight: bcs ? bcs.lineHeight : null,
       bodyColor: bcs ? bcs.color : null,
       bodyBackground: bcs ? bcs.backgroundColor : null,
       h1FontFamily: h1cs ? h1cs.fontFamily : null,
@@ -184,8 +187,17 @@ _EXTRACT_STYLES_JS = """
       color: btncs.color,
       backgroundColor: btncs.backgroundColor,
       borderRadius: btncs.borderRadius,
+      boxShadow: btncs.boxShadow,
+      padding: btncs.padding,
       fontSize: btncs.fontSize,
       fontWeight: btncs.fontWeight,
+    } : null,
+    cardSample: cardcs && card ? {
+      tag: card.tagName.toLowerCase(),
+      borderRadius: cardcs.borderRadius,
+      boxShadow: cardcs.boxShadow,
+      padding: cardcs.padding,
+      backgroundColor: cardcs.backgroundColor,
     } : null,
     headings: sample('h1, h2, h3'),
     links: sample('a', 8),
