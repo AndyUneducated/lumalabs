@@ -14,6 +14,7 @@ All architecture decisions for this project live in this single file. Older numb
 | [0008](#adr-0008) | Asset mirroring + asset_coverage (more_faithful only) | Phase 2 |
 | [0009](#adr-0009) | Design tokens: `:root` as source of truth + live edit | Phase 3 |
 | [0010](#adr-0010) | Partial edits + Code/Compare UI (Phase 4) | Phase 4 |
+| [0011](#adr-0011) | Output history: single write funnel + snapshot-before-write | Phase 5 |
 
 ---
 
@@ -443,6 +444,52 @@ Generation hard-codes colors/fonts, so "re-brand" means a full-file rewrite — 
 - **Impact**: `sections.py`, `edit_section` tool, three view tabs, `/source` `/compare` `/shots`.
 - **Risk**: bs4 may reformat HTML on save; mitigated by surgical single-block replace.
 - **Limit**: no file tree / rollback (Phase 5).
+
+---
+
+<a id="adr-0011"></a>
+
+## 0011 — Output history: single write funnel + snapshot-before-write
+
+- **Status**: Accepted
+- **Date**: 2026-06-21
+- **Phase**: Phase 5
+
+### Context
+
+Edits can come from the agent (`write_html`, `edit_section`, `set_design_token`) or the tokens panel (`POST /tokens`). A bad hero edit or token tweak should be undoable without re-running the agent. Reviewers also need proof the agent works reliably across benchmark sites.
+
+### Decision
+
+1. **`history.py`** with `save_output(html, label)` — snapshot current `index.html` *before* every overwrite.
+2. **All four write paths** funnel through `save_output` (tools + `POST /tokens`).
+3. **API**: `GET /history`, `GET /history/diff`, `POST /history/rollback`, `POST /history/revert-last`.
+4. **Viewer**: History panel + Revert last toolbar button; unified diff with +/- coloring.
+5. **`friendly_capture_error()`** in `browser.py` for user-facing capture failures.
+6. **`fidelity_batch.py --generate`** runs agent per benchmark and writes `data/regression_report.json`.
+
+### Rationale
+
+- One funnel avoids missing a write path and skipping snapshots.
+- Snapshot-before-write makes `revert_last` always restore the exact prior bytes.
+- Rollback snapshots current first, so undo-of-undo is safe.
+- Friendly errors keep the agent loop alive without stack traces in chat/UI.
+- Regression batch is the reliability proof for interview/APPROACH.
+
+### Alternatives
+
+| Option | Pros | Cons | Outcome |
+|--------|------|------|---------|
+| Git-based history | Familiar | Overkill; needs git in output | Not chosen |
+| Snapshot-after-write | Simple | Revert needs "previous" pointer | Not chosen |
+| Snapshot-before-write | Revert = last entry | First write has no snapshot | **Chosen** |
+| Full diff accept/reject modal | Rich UX | Heavy; agent-focused review cares less | Deferred (revert-last enough) |
+
+### Consequences and risks
+
+- **Impact**: `history.py`, four write call sites, four endpoints, History panel, `--generate` batch.
+- **Risk**: History grows; capped at 50 entries with oldest file deletion.
+- **Limit**: single-file history only; no branching.
 
 ---
 

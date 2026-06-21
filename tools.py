@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
 
 from assets import extract_assets_url, load_manifest
-from browser import CaptureResult, capture_compare, capture_file, capture_url
+from browser import CaptureResult, capture_compare, capture_file, capture_url, friendly_capture_error
+from history import save_output
 from compare import (
     DEFAULT_PROFILE,
     diff_heatmap,
@@ -175,8 +176,7 @@ async def write_html(html: str):
     Args:
         html: Complete HTML document source
     """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_FILE.write_text(html)
+    save_output(html, "write_html")
     _notify("html_updated")
     return f"HTML written ({len(html)} chars). Preview updated."
 
@@ -215,7 +215,7 @@ def _capture_to_content(result: CaptureResult, label: str) -> dict:
                 "type": "text",
                 "text": (
                     f"{label} — DOM-only fallback (screenshot failed).\n"
-                    f"Error: {result.error or 'unknown'}\n"
+                    f"Error: {friendly_capture_error(result.error)}\n"
                     "Use the style JSON and text outline below. Do not guess colors from memory."
                 ),
             }
@@ -295,7 +295,8 @@ async def extract_assets(url: str):
                 {
                     "type": "text",
                     "text": (
-                        f"Asset extract failed for {normalized}: {result.error}\n"
+                        f"Asset extract failed for {normalized}: "
+                        f"{friendly_capture_error(result.error)}\n"
                         "Fall back to capture_site styles only."
                     ),
                 }
@@ -349,13 +350,13 @@ async def run_fidelity_comparison(
     output = await capture_compare(str(OUTPUT_FILE.resolve()), is_file=True)
 
     if target.compare_payload is None or output.compare_payload is None:
-        return {
-            "error": "compare_unavailable",
-            "detail": (
-                f"Target error: {target.error or 'none'}. "
-                f"Output error: {output.error or 'none'}."
-            ),
-        }
+        parts = []
+        if target.error:
+            parts.append(f"Target: {friendly_capture_error(target.error)}")
+        if output.error:
+            parts.append(f"Output: {friendly_capture_error(output.error)}")
+        detail = " ".join(parts) if parts else "Capture data unavailable."
+        return {"error": "Could not compare pages.", "detail": detail}
 
     cfg = load_config(profile=prof)
     output_html = OUTPUT_FILE.read_text()
@@ -402,7 +403,7 @@ async def edit_section(selector: str, html: str):
             f"Section '{selector}' not found. Available data-section anchors: {names}"
         )
 
-    OUTPUT_FILE.write_text(updated)
+    save_output(updated, f"edit-{selector}")
     _notify("html_updated")
     return f"Section '{selector}' updated ({len(html)} chars). Preview refreshed."
 
@@ -516,7 +517,7 @@ async def set_design_token(name: str, value: str):
     if not parse_root_vars(html):
         return "No :root block in output/index.html. Author tokens during write_html first."
     patched = patch_root_vars(html, {name: value})
-    OUTPUT_FILE.write_text(patched)
+    save_output(patched, f"token-{name.lstrip('-')}")
     _notify("html_updated")
     return f"Updated {name} = {value}. Preview refreshed."
 

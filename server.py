@@ -193,14 +193,62 @@ class CompareRequest(BaseModel):
 
 @app.post("/compare")
 async def run_compare(req: CompareRequest):
+    from browser import friendly_capture_error
     from tools import run_fidelity_comparison
 
     result = await run_fidelity_comparison(req.url, profile=req.profile)
     if result.get("error"):
+        err = result["error"]
+        detail = result.get("detail")
+        if detail:
+            detail = friendly_capture_error(detail) if len(str(detail)) > 80 else detail
         return {
-            "error": result["error"],
-            "detail": result.get("detail"),
+            "error": friendly_capture_error(err) if err == "Could not compare pages." else err,
+            "detail": detail,
         }
+    return result
+
+
+# --- Output history (Phase 5) ---
+
+
+class RollbackRequest(BaseModel):
+    seq: int
+
+
+@app.get("/history")
+async def get_history():
+    from history import list_history
+
+    return {"entries": list_history()}
+
+
+@app.get("/history/diff")
+async def get_history_diff(seq: int | None = None):
+    from history import diff
+
+    return {"diff": diff(seq)}
+
+
+@app.post("/history/rollback")
+async def rollback_history(req: RollbackRequest):
+    from history import restore
+
+    result = restore(req.seq)
+    if result.get("error"):
+        return result
+    _notify("html_updated")
+    return result
+
+
+@app.post("/history/revert-last")
+async def revert_last_history():
+    from history import revert_last
+
+    result = revert_last()
+    if result.get("error"):
+        return result
+    _notify("html_updated")
     return result
 
 
@@ -223,6 +271,7 @@ async def get_tokens():
 
 @app.post("/tokens")
 async def update_tokens(req: TokenUpdateRequest):
+    from history import save_output
     from tokens import list_tokens_from_html, parse_root_vars, patch_root_vars
 
     if not OUTPUT_FILE.is_file():
@@ -231,7 +280,7 @@ async def update_tokens(req: TokenUpdateRequest):
     if not parse_root_vars(html):
         return {"tokens": [], "error": "no :root block in output/index.html"}
     patched = patch_root_vars(html, req.updates)
-    OUTPUT_FILE.write_text(patched)
+    save_output(patched, "tokens-panel")
     _notify("html_updated")
     return {"tokens": list_tokens_from_html(patched)}
 
@@ -623,14 +672,6 @@ async def reset_all_sessions():
         OUTPUT_FILE.unlink()
     _sessions.clear()
     _save_sessions()
-    _notify("html_updated")
-    return {"reset": True}
-
-
-@app.post("/chat/reset")
-async def reset_chat():
-    if OUTPUT_FILE.exists():
-        OUTPUT_FILE.unlink()
     _notify("html_updated")
     return {"reset": True}
 

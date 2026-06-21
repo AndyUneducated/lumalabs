@@ -14,11 +14,80 @@ All per-phase “what we ship / why / how we verify” notes live in **this one 
 
 | Section | Anchor |
 |---------|--------|
+| Agent talking points (read this first) | [#agent-talking-points](#agent-talking-points) |
 | Template (copy for a new phase) | [#interview-template](#interview-template) |
 | Phase 0 | [#interview-phase-0](#interview-phase-0) |
 | Phase 1 | [#interview-phase-1](#interview-phase-1) |
 | Phase 2 | [#interview-phase-2](#interview-phase-2) |
 | Phase 4 | [#interview-phase-4](#interview-phase-4) |
+| Phase 5 | [#interview-phase-5](#interview-phase-5) |
+
+---
+
+<a id="agent-talking-points"></a>
+
+## Agent talking points (cross-phase summary)
+
+The take-home says it cares most about the **agentic experience**: how the agent
+reasons, what tools we give it, and how we shaped its behavior to get good
+results **reliably**. This section is the one-page story to tell. Each line maps
+to a phase below.
+
+### One-line pitch
+
+We turned a blind "write HTML and hope" agent into one that **looks at the target
+with real eyes, builds, measures itself against the target, and fixes the named
+worst parts** — all inside a fixed, capped loop with one fidelity knob that drives
+both generation and scoring.
+
+### The 10 tools (we gave the agent eyes + a ruler)
+
+| Tool | What it gives the agent | Phase |
+|------|-------------------------|-------|
+| `capture_site(url)` | Pixel-level eyes: screenshot tiles + computed styles of the target | 1 |
+| `screenshot_output()` | Sees its own output to self-check | 1 |
+| `compare_to_target(url)` | A ruler: four-axis score (content/structure/layout/visual), verdict, ranked `worst_sections` | 2 |
+| `extract_assets(url)` | Mirrors real logo/font/SVG/background; gated by `asset_coverage` | 1 (more_faithful) |
+| `extract_design_tokens(url)` | Reads brand color/type/shape into canonical tokens | 3 |
+| `read_design_tokens()` | Reads current `:root` tokens from output | 3 |
+| `set_design_token(name, value)` | Re-brands by patching one CSS var, no full rewrite | 3 |
+| `edit_section(selector, html)` | Local replace by `data-section`, not whole-file rewrite | 4 |
+| `write_html` / `read_html` | Base write/read (from scaffold) | — |
+
+### How we shaped behavior (this is the judgment part)
+
+- **Fixed workflow, not free-for-all**: look → build → self-check → iterate, with a
+  soft cap of 2–3 rounds. The agent does not spin forever.
+- **One knob drives two things**: the fidelity profile (**more_editable /
+  balanced / more_faithful**) changes both the generation prompt *and* the scoring
+  weights, so what we ask for and what we measure stay aligned.
+- **Two-layer scoring**: per-axis hard gates catch cheap bugs (missing footer);
+  a normalized weighted total ranks overall quality. No single number can fake a pass.
+- **Profile-aware hard rules**: in more_faithful the agent must call
+  `capture_site` → `extract_assets` → `write_html` in order and may not use
+  placeholder logos.
+- **`:root` as single source of truth** for tokens, so brand edits never drift
+  from the HTML.
+- **Graceful degrade**: `domcontentloaded` + short wait for heavy-JS sites, and a
+  DOM-only fallback so capture never hard-crashes the run.
+
+### Tradeoffs / where we pushed back (good interview answers)
+
+- **Fidelity is not pixel-only.** Different copy/colors swing pixel diffs wildly,
+  so we added content + structure axes. (Phase 2)
+- **Tokens live in `:root`, not a sidecar JSON**, to avoid HTML/token drift. (Phase 3)
+- **We removed the fidelity knob from the Builder toolbar** — it does not
+  regenerate, so showing it there would mislead; we show the current profile
+  read-only instead. (product-boundary call)
+- **Local edits use bs4, not regex** — nested HTML breaks regex replaces. (Phase 4)
+
+### What we deliberately left out (and why)
+
+- **Snapshot / rollback / accept-reject diff UI** (IDEA Phase 5): this is editor
+  product UX, not "how the agent reasons." Lower value for an agent-focused review.
+- **The reliability proof that *does* matter** — a multi-site batch run that logs
+  per-site similarity — is the one Phase 5 slice worth showing, on top of the
+  existing `scripts/fidelity_batch.py`.
 
 ---
 
@@ -287,3 +356,48 @@ How do we prove this phase’s definition of done?
 - `python scripts/verify_phase4.py`
 - Code tab copy/download on a generated page.
 - Compare tab shows content/structure/layout/visual scores after Run compare.
+
+---
+
+<a id="interview-phase-5"></a>
+
+## Phase 5 — Reliability and control (implemented)
+
+> Maps to [`IDEA.md`](../IDEA.md) Phase 5 · Plan: [`phase-5-reliability.md`](phase-5-reliability.md)
+
+### What we ship
+
+1. **`save_output()` write funnel** — every edit snapshots the prior `index.html` under `output/.history/`.
+2. **Revert last + History panel** — toolbar button, list of snapshots, unified diff, per-row rollback.
+3. **History API** — `GET /history`, `GET /history/diff`, `POST /history/rollback`, `POST /history/revert-last`.
+4. **`friendly_capture_error()`** — plain copy for timeout/DNS/SSL/nav failures (no stack traces in UI).
+5. **`fidelity_batch.py --generate`** — agent per benchmark → `data/regression_report.json`.
+
+### Key tech choices
+
+| Choice | Why | What we did not do | ADR |
+|--------|-----|---------------------|-----|
+| Snapshot-before-write | `revert_last` = restore last pre-change bytes exactly | Snapshot-after-write | [`0011`](ADR.md#adr-0011) |
+| Single write funnel | No missed snapshots from panel vs agent writes | Per-tool ad-hoc history | [`0011`](ADR.md#adr-0011) |
+| Revert-last vs full accept/reject UI | Enough for agent-focused review; lighter UX | Modal on every write | [`0011`](ADR.md#adr-0011) |
+| `--generate` regression batch | Proves "reliably" with per-site scores | Manual demo only | [`0011`](ADR.md#adr-0011) |
+
+### Likely follow-up questions
+
+#### Q1: Why snapshot *before* write?
+
+**Answer:** The newest history entry is always "what we had right before this change." `revert_last` restores that file — one step back, exact bytes.
+
+#### Q2: Does rollback create a new snapshot?
+
+**Answer:** Yes. `restore()` calls `save_output()` first, so undo-of-undo is safe.
+
+#### Q3: What does `--generate` do vs normal batch?
+
+**Answer:** Normal batch scores an existing `output/index.html` against all benchmarks. `--generate` runs the **agent** for each benchmark URL, then scores that site's output — writes `data/regression_report.json`.
+
+### How we verify
+
+- `python scripts/verify_phase5.py` — snapshots, revert, diff, friendly errors.
+- Make an edit in the app → History panel shows an entry → Revert last restores preview.
+- `python scripts/fidelity_batch.py --generate` (optional; needs Claude CLI + API budget).

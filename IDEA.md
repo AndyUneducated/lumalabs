@@ -505,6 +505,8 @@ flowchart TD
 
 ### Phase 5 — Reliability and control (score boost)
 
+> **Docs**: [`docs/INTERVIEW.md#interview-phase-5`](docs/INTERVIEW.md#interview-phase-5) · [`docs/phase-5-reliability.md`](docs/phase-5-reliability.md) · [ADR 0011](docs/ADR.md#adr-0011)
+
 **Goal**: Move from “it runs” to “we trust it” — versioned, reversible, with clear failure handling.
 
 **Features / user stories**

@@ -22,6 +22,33 @@ MAX_TILES = 4
 NAV_TIMEOUT_MS = 30_000
 SHOTS_DIR = Path("output") / ".shots"
 
+_BROWSER_ERROR_PATTERNS: list[tuple[tuple[str, ...], str]] = [
+    (("timeout", "timed out"), "This page took too long to load. We saved whatever we could from the DOM."),
+    (("err_name_not_resolved", "dns"), "We could not reach that URL. Check the address and your network."),
+    (("connection refused", "err_connection_refused"), "The server refused the connection. The site may be down."),
+    (("err_cert", "ssl", "certificate"), "Secure connection failed. The site certificate may be invalid."),
+    (("net::err_", "navigation"), "The browser could not open that page. Try a different URL."),
+]
+
+
+def friendly_capture_error(err: str | Exception | None) -> str:
+    """Map Playwright/network failures to plain user-facing copy (no stack traces)."""
+    if err is None:
+        return "Could not capture this page."
+    raw = str(err).strip()
+    if not raw:
+        return "Could not capture this page."
+    lower = raw.lower()
+    for needles, message in _BROWSER_ERROR_PATTERNS:
+        if any(n in lower for n in needles):
+            return message
+    if "not found" in lower and "file" in lower:
+        return "Output file not found yet. Generate a page first."
+    if len(raw) > 200 or "traceback" in lower:
+        return "Capture failed. We used a DOM-only fallback when possible."
+    return f"Capture issue: {raw[:180]}"
+
+
 _browser_lock = asyncio.Lock()
 _playwright: Playwright | None = None
 _browser: Browser | None = None
@@ -328,7 +355,7 @@ async def capture_url(url: str) -> CaptureResult:
                     paths=[],
                     styles={**(styles or {}), "textOutline": outline},
                     dom_only=True,
-                    error=str(e),
+                    error=friendly_capture_error(e),
                     source=url,
                 )
             except Exception as inner:
@@ -336,7 +363,7 @@ async def capture_url(url: str) -> CaptureResult:
                     paths=[],
                     styles=None,
                     dom_only=True,
-                    error=f"{e}; fallback failed: {inner}",
+                    error=friendly_capture_error(f"{e}; fallback failed: {inner}"),
                     source=url,
                 )
         finally:
@@ -364,7 +391,7 @@ async def capture_file(file_path: Path) -> CaptureResult:
             return CaptureResult(
                 paths=[],
                 dom_only=True,
-                error=str(e),
+                error=friendly_capture_error(e),
                 source=file_url,
             )
         finally:
@@ -407,7 +434,7 @@ async def capture_compare(source: str, *, is_file: bool = False) -> CaptureResul
                     styles={**(styles or {}), "textOutline": outline},
                     compare_payload=compare_payload,
                     dom_only=True,
-                    error=str(e),
+                    error=friendly_capture_error(e),
                     source=target,
                 )
             except Exception as inner:
@@ -416,7 +443,7 @@ async def capture_compare(source: str, *, is_file: bool = False) -> CaptureResul
                     styles=None,
                     compare_payload=None,
                     dom_only=True,
-                    error=f"{e}; fallback failed: {inner}",
+                    error=friendly_capture_error(f"{e}; fallback failed: {inner}"),
                     source=target,
                 )
         finally:

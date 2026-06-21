@@ -5,6 +5,7 @@ Usage:
   python scripts/fidelity_batch.py output/index.html
   python scripts/fidelity_batch.py output/index.html --url https://example.com
   python scripts/fidelity_batch.py --calibrate output/index.html
+  python scripts/fidelity_batch.py --generate [--profile balanced]
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import shutil
 import statistics
 import sys
 from pathlib import Path
@@ -19,11 +22,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+os.environ.pop("CLAUDECODE", None)
+
 from browser import capture_compare, close_browser  # noqa: E402
 from compare import default_config, fidelity_report, load_config  # noqa: E402
 
 BENCHMARKS = ROOT / "data" / "benchmarks.json"
 REPORT_OUT = ROOT / "data" / "fidelity_report.json"
+REGRESSION_OUT = ROOT / "data" / "regression_report.json"
+OUTPUT_FILE = ROOT / "output" / "index.html"
 
 
 async def _capture_pair(url: str, html_path: Path):
@@ -32,24 +39,39 @@ async def _capture_pair(url: str, html_path: Path):
     return target, output
 
 
-def _run_report(url: str, html_path: Path, site_id: str = "") -> dict:
-    target, output = asyncio.run(_capture_pair(url, html_path))
+def _report_from_captures(
+    url: str, site_id: str, target, output, profile: str | None = None
+) -> dict:
     if target.compare_payload is None or output.compare_payload is None:
+        from browser import friendly_capture_error
+
         return {
             "id": site_id or url,
             "url": url,
             "error": "compare payload unavailable",
-            "target_error": target.error,
-            "output_error": output.error,
+            "target_error": friendly_capture_error(target.error),
+            "output_error": friendly_capture_error(output.error),
         }
+    cfg = load_config(profile=profile) if profile else load_config()
     report = fidelity_report(
         target.compare_payload,
         output.compare_payload,
         target.paths,
         output.paths,
-        load_config(),
+        cfg,
     )
     return {"id": site_id or url, "url": url, **report}
+
+
+async def _run_report_async(
+    url: str, html_path: Path, site_id: str = "", profile: str | None = None
+) -> dict:
+    target, output = await _capture_pair(url, html_path)
+    return _report_from_captures(url, site_id, target, output, profile=profile)
+
+
+def _run_report(url: str, html_path: Path, site_id: str = "") -> dict:
+    return asyncio.run(_run_report_async(url, html_path, site_id))
 
 
 def _print_table(rows: list[dict]) -> None:
@@ -169,6 +191,58 @@ async def _calibrate_async(html_path: Path) -> dict:
     }
 
 
+async def _run_agent_for_url(url: str, profile: str) -> None:
+    """Run the website builder agent end-to-end for one benchmark URL."""
+    from claude_agent_sdk import ClaudeSDKClient
+    from server import _build_agent_options
+    from tools import set_fidelity_profile, set_notify_fn
+
+    set_notify_fn(lambda _e=None: None)
+    set_fidelity_profile(profile)
+    opts = _build_agent_options(fidelity_profile=profile)
+    message = (
+        f"Build a landing page template inspired by this URL: {url}\n"
+        "Follow the full workflow: capture_site, build with write_html, "
+        "self-check with compare_to_target, and iterate up to 2 rounds."
+    )
+    async with ClaudeSDKClient(options=opts) as client:
+        await client.query(message)
+        async for _msg in client.receive_response():
+            pass
+
+
+async def _generate_regression(profile: str) -> list[dict]:
+    benchmarks = json.loads(BENCHMARKS.read_text())
+    rows: list[dict] = []
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    for bench in benchmarks:
+        site_id = bench["id"]
+        url = bench["url"]
+        print(f"[generate] {site_id}: {url}", file=sys.stderr)
+
+        if OUTPUT_FILE.is_file():
+            OUTPUT_FILE.unlink()
+
+        try:
+            await _run_agent_for_url(url, profile)
+        except Exception as e:
+            rows.append({"id": site_id, "url": url, "error": f"agent failed: {e}"})
+            continue
+
+        if not OUTPUT_FILE.is_file():
+            rows.append({"id": site_id, "url": url, "error": "no output generated"})
+            continue
+
+        backup = OUTPUT_FILE.parent / f"regression-{site_id}.html"
+        shutil.copy(OUTPUT_FILE, backup)
+        row = await _run_report_async(url, OUTPUT_FILE, site_id, profile=profile)
+        row["output_backup"] = str(backup.relative_to(ROOT))
+        rows.append(row)
+
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fidelity batch scoring")
     parser.add_argument(
@@ -184,6 +258,16 @@ def main() -> int:
         help="Suggest floor/ceil/thresholds from benchmarks",
     )
     parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="Run agent per benchmark URL, score, write regression_report.json",
+    )
+    parser.add_argument(
+        "--profile",
+        default="balanced",
+        help="Fidelity profile for --generate (default: balanced)",
+    )
+    parser.add_argument(
         "--output",
         default=str(REPORT_OUT),
         help="JSON report output path",
@@ -191,11 +275,25 @@ def main() -> int:
     args = parser.parse_args()
 
     html_path = Path(args.html)
-    if not html_path.is_file() and not args.calibrate:
+    if not args.calibrate and not args.generate and not html_path.is_file():
         print(f"HTML not found: {html_path}", file=sys.stderr)
         return 1
 
     try:
+        if args.generate:
+            rows = asyncio.run(_generate_regression(args.profile))
+            _print_table(rows)
+            payload = {
+                "profile": args.profile,
+                "generated_at": __import__("datetime").datetime.now(
+                    __import__("datetime").timezone.utc
+                ).isoformat(),
+                "sites": rows,
+            }
+            REGRESSION_OUT.write_text(json.dumps(payload, indent=2) + "\n")
+            print(f"\nWrote {REGRESSION_OUT}")
+            return 0
+
         if args.calibrate:
             if not html_path.is_file():
                 print(f"HTML required for calibration: {html_path}", file=sys.stderr)

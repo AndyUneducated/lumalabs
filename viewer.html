@@ -65,13 +65,25 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   #session-context .ctx-muted { color: #a8a29e; font-weight: 400; }
-  #tokens-toggle {
-    margin-left: auto; padding: 6px 12px; font-size: 11px; font-weight: 500;
+  #toolbar-actions {
+    margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+  }
+  #revert-last-btn, #panel-toggle {
+    padding: 6px 12px; font-size: 11px; font-weight: 500;
     background: #f5f5f4; color: #1c1917; border: 1px solid #e7e5e4;
     border-radius: 6px; cursor: pointer;
   }
-  #tokens-toggle:hover { background: #e7e5e4; }
-  #tokens-toggle.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  #revert-last-btn:hover, #panel-toggle:hover { background: #e7e5e4; }
+  #panel-toggle.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  #revert-last-btn:disabled { opacity: 0.45; cursor: default; }
+  #status-toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #1c1917; color: #fafaf9; padding: 10px 16px; border-radius: 8px;
+    font-size: 13px; max-width: 90vw; z-index: 1000; display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  #status-toast.error { background: #991b1b; }
+  #status-toast.visible { display: block; }
 
   #builder-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
   #builder-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -128,12 +140,64 @@
   }
   .score-card .label { font-size: 10px; color: #a8a29e; text-transform: uppercase; }
   .score-card .value { font-size: 18px; font-weight: 600; color: #1c1917; }
-  .compare-verdict {
-    font-size: 13px; font-weight: 600; margin-bottom: 12px;
+  .similarity-block {
+    background: #fff; border: 1px solid #e7e5e4; border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 14px;
   }
-  .compare-verdict.pass { color: #16a34a; }
-  .compare-verdict.warn { color: #ca8a04; }
-  .compare-verdict.fail { color: #dc2626; }
+  .similarity-head {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;
+  }
+  .similarity-title {
+    font-size: 11px; font-weight: 600; color: #a8a29e;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .similarity-pct { font-size: 22px; font-weight: 700; color: #1c1917; }
+  .similarity-track {
+    position: relative; height: 10px; border-radius: 6px; margin: 18px 0 8px;
+    background: linear-gradient(90deg, #c7d2fe 0%, #e7e5e4 50%, #bbf7d0 100%);
+  }
+  .similarity-band {
+    position: absolute; top: 0; height: 100%; border-radius: 6px;
+    background: rgba(37, 99, 235, 0.18); border: 1px solid rgba(37, 99, 235, 0.4);
+  }
+  .similarity-marker {
+    position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 2px;
+    background: #1c1917; transform: translateX(-50%);
+    box-shadow: 0 0 0 2px #fff;
+  }
+  .similarity-ends {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: #a8a29e; margin-top: 2px;
+  }
+  .similarity-note {
+    font-size: 12px; color: #44403c; margin-top: 10px; line-height: 1.45;
+  }
+  .similarity-note strong { color: #1c1917; }
+  .issue-group { margin-bottom: 14px; }
+  .issue-group-title {
+    font-size: 11px; font-weight: 600; color: #a8a29e;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  .issue-row {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 8px 10px; background: #fff; border: 1px solid #e7e5e4;
+    border-radius: 8px; margin-bottom: 6px;
+  }
+  .issue-pill {
+    flex-shrink: 0; font-size: 10px; font-weight: 600; padding: 2px 7px;
+    border-radius: 999px; text-transform: capitalize; line-height: 1.5;
+  }
+  .issue-pill.content { background: #e0e7ff; color: #3730a3; }
+  .issue-pill.visual { background: #dcfce7; color: #166534; }
+  .issue-pill.layout { background: #ffedd5; color: #9a3412; }
+  .issue-pill.structure { background: #f3e8ff; color: #6b21a8; }
+  .issue-pill.assets { background: #fce7f3; color: #9d174d; }
+  .issue-pill.info { background: #f1f5f9; color: #475569; }
+  .issue-text { font-size: 12px; color: #1c1917; line-height: 1.45; min-width: 0; }
+  .issue-quote {
+    display: block; margin-top: 3px; color: #78716c; font-size: 11px;
+    font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .compare-shots {
     display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
   }
@@ -150,16 +214,36 @@
   .compare-issues ul { margin: 4px 0 0 18px; padding: 0; }
   #compare-heatmap { width: 100%; max-width: 640px; border-radius: 6px; border: 1px solid #e7e5e4; }
 
-  #tokens-panel {
-    width: 280px; flex-shrink: 0; display: none; flex-direction: column;
-    background: #fff; border-left: 1px solid #e7e5e4; overflow: hidden;
+  /* Right side panel (Chat | Tokens) */
+  #side-divider {
+    width: 6px; cursor: col-resize; background: #e7e5e4; flex-shrink: 0;
+    transition: background 0.15s;
   }
-  #tokens-panel.open { display: flex; }
-  #tokens-panel-header {
-    padding: 10px 12px; border-bottom: 1px solid #e7e5e4;
-    font-size: 11px; font-weight: 600; color: #a8a29e;
-    text-transform: uppercase; letter-spacing: 0.05em;
+  #side-divider:hover, #side-divider.active { background: #2563eb55; }
+  #side-panel {
+    width: 380px; flex-shrink: 0; display: flex; flex-direction: column;
+    background: #fff; border-left: 1px solid #e7e5e4; overflow: hidden; min-width: 260px;
   }
+  #builder-body.panel-closed #side-panel,
+  #builder-body.panel-closed #side-divider { display: none; }
+  #side-tabs {
+    display: flex; align-items: center; gap: 0; padding: 0 6px;
+    border-bottom: 1px solid #e7e5e4; flex-shrink: 0; background: #fafaf9;
+  }
+  .side-tab {
+    padding: 9px 14px; border: none; background: transparent; cursor: pointer;
+    font-size: 12px; font-weight: 500; color: #78716c;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .side-tab:hover { color: #1c1917; }
+  .side-tab.active { color: #1c1917; border-bottom-color: #2563eb; }
+  #side-close {
+    margin-left: auto; width: 26px; height: 26px; border: none; background: transparent;
+    color: #a8a29e; font-size: 18px; line-height: 1; cursor: pointer; border-radius: 6px;
+  }
+  #side-close:hover { background: #e7e5e4; color: #1c1917; }
+  .side-content { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+  .side-content.active { display: flex; }
   #tokens-list {
     flex: 1; overflow-y: auto; padding: 8px 12px 16px;
     display: flex; flex-direction: column; gap: 12px;
@@ -198,6 +282,42 @@
     font-size: 12px; color: #a8a29e; line-height: 1.5; padding: 8px 0;
   }
 
+  /* History view (left content tab) */
+  #view-history { background: #fff; }
+  #history-list {
+    flex: 0 0 auto; max-height: 45%; overflow-y: auto; padding: 10px 14px;
+    border-bottom: 1px solid #e7e5e4;
+  }
+  #history-empty { font-size: 12px; color: #a8a29e; padding: 8px 0; }
+  .history-row {
+    display: flex; flex-direction: column; gap: 4px; padding: 8px 0;
+    border-bottom: 1px solid #f5f5f4;
+  }
+  .history-row:last-child { border-bottom: none; }
+  .history-meta { font-size: 11px; color: #78716c; }
+  .history-label { font-size: 12px; font-weight: 500; color: #1c1917; }
+  .history-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .history-actions button {
+    padding: 3px 8px; font-size: 10px; border: 1px solid #e7e5e4;
+    border-radius: 4px; background: #fff; cursor: pointer; color: #1c1917;
+  }
+  .history-actions button:hover { background: #f5f5f4; }
+  #history-diff-wrap {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  }
+  #history-diff-header {
+    padding: 8px 12px; font-size: 11px; color: #78716c; border-bottom: 1px solid #f5f5f4;
+    flex-shrink: 0;
+  }
+  #history-diff {
+    flex: 1; margin: 0; padding: 10px 12px; overflow: auto;
+    font-size: 11px; line-height: 1.45; font-family: ui-monospace, monospace;
+    background: #1c1917; color: #e7e5e4; white-space: pre-wrap; word-break: break-word;
+  }
+  .diff-add { color: #86efac; }
+  .diff-del { color: #fca5a5; }
+  .diff-hunk { color: #7dd3fc; }
+
   /* Builder state */
   #builder { display: none; flex-direction: column; height: 100vh; }
   #builder.active { display: flex; flex-direction: column; }
@@ -206,17 +326,6 @@
   #view-preview { flex: 1; min-height: 0; }
   #preview { flex: 1; border: none; width: 100%; background: #fff; min-height: 0; }
 
-  #divider {
-    height: 6px; cursor: row-resize; background: #e7e5e4; flex-shrink: 0;
-    transition: background 0.15s;
-  }
-  #divider:hover, #divider.active { background: #2563eb55; }
-
-  #chat {
-    height: 220px; min-height: 100px; max-height: 60vh;
-    display: flex; flex-direction: column; background: #fff;
-    border-top: 1px solid #e7e5e4;
-  }
   #chat-messages {
     flex: 1; overflow-y: auto; padding: 12px 16px;
     display: flex; flex-direction: column; gap: 6px;
@@ -247,11 +356,6 @@
   }
   #chat-send:hover { opacity: 0.85; }
   #chat-send:disabled { opacity: 0.4; cursor: default; }
-  #chat-reset {
-    padding: 8px 12px; background: transparent; color: #a8a29e; border: 1px solid #e7e5e4;
-    border-radius: 8px; cursor: pointer; font-size: 12px;
-  }
-  #chat-reset:hover { color: #1c1917; border-color: #d6d3d1; }
 
   /* Sessions list */
   #sessions { font-size: 13px; }
@@ -297,14 +401,19 @@
   <div id="builder-toolbar">
     <button type="button" id="home-btn" title="Back to home (keeps this project)">← Home</button>
     <div id="session-context"><span class="ctx-muted">New project</span></div>
-    <button type="button" id="tokens-toggle" title="Design tokens">Tokens</button>
+    <div id="toolbar-actions">
+      <button type="button" id="revert-last-btn" title="Undo the last change">↶ Revert last</button>
+      <button type="button" id="panel-toggle" title="Show or hide the edit panel">◧ Edit</button>
+    </div>
   </div>
   <div id="builder-body">
+    <!-- LEFT: content views -->
     <div id="builder-main">
       <div id="view-tabs" role="tablist">
         <button type="button" class="view-tab active" data-view="preview">Preview</button>
         <button type="button" class="view-tab" data-view="code">Code</button>
         <button type="button" class="view-tab" data-view="compare">Compare</button>
+        <button type="button" class="view-tab" data-view="history">History</button>
       </div>
       <div id="view-preview" class="view-panel active">
         <iframe id="preview" src="/preview"></iframe>
@@ -329,29 +438,58 @@
           <div id="compare-results" style="display:none;"></div>
         </div>
       </div>
-      <div id="divider"></div>
-      <div id="chat">
+      <div id="view-history" class="view-panel">
+        <div id="history-list">
+          <p id="history-empty">Edits will appear here after the first change.</p>
+        </div>
+        <div id="history-diff-wrap">
+          <div id="history-diff-header">Select a snapshot to view its diff vs current.</div>
+          <pre id="history-diff"></pre>
+        </div>
+      </div>
+    </div>
+    <!-- DIVIDER: drag to resize side panel width -->
+    <div id="side-divider"></div>
+    <!-- RIGHT: collapsible side panel (Chat | Tokens) -->
+    <aside id="side-panel">
+      <div id="side-tabs" role="tablist">
+        <button type="button" class="side-tab active" data-side="chat">Chat</button>
+        <button type="button" class="side-tab" data-side="tokens">Design</button>
+        <button type="button" id="side-close" title="Close panel">×</button>
+      </div>
+      <div id="side-chat" class="side-content active">
         <div id="chat-messages"></div>
         <div id="chat-input-area">
           <input id="chat-input" type="text" placeholder="Give feedback or ask for changes..." autocomplete="off">
           <button id="chat-send">Send</button>
-          <button id="chat-reset" onclick="resetAll()" title="Clear project and start over">Reset</button>
         </div>
       </div>
-    </div>
-    <aside id="tokens-panel">
-      <div id="tokens-panel-header">Design Tokens</div>
-      <div id="tokens-list">
-        <p id="tokens-empty">Generate a page to see its design tokens.</p>
+      <div id="side-tokens" class="side-content">
+        <div id="tokens-list">
+          <p id="tokens-empty">Generate a page to see its design tokens.</p>
+        </div>
       </div>
     </aside>
   </div>
 </div>
 
+<div id="status-toast" role="status" aria-live="polite"></div>
+
 <script>
 const preview = document.getElementById('preview');
 const landing = document.getElementById('landing');
 const builder = document.getElementById('builder');
+
+let _toastTimer = null;
+function showToast(message, isError = false) {
+  const el = document.getElementById('status-toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('error', isError);
+  el.classList.add('visible');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('visible'), 4500);
+}
 
 // --- View tabs: Preview | Code | Compare ---
 let _activeView = 'preview';
@@ -366,6 +504,7 @@ function setActiveView(name) {
     panel.classList.toggle('active', panel.id === `view-${name}`);
   });
   if (name === 'code') loadCodeView();
+  if (name === 'history' && window.loadHistoryPanel) window.loadHistoryPanel();
   if (name === 'compare' && _targetUrl) {
     document.getElementById('compare-status').textContent =
       `Target: ${_targetUrl}`;
@@ -460,16 +599,120 @@ async function runCompare() {
     });
     const data = await res.json();
     if (data.error) {
-      status.textContent = data.error + (data.detail ? ': ' + data.detail : '');
+      const msg = data.detail ? `${data.error} ${data.detail}` : data.error;
+      status.textContent = msg;
+      showToast(msg, true);
       return;
     }
     renderCompareResults(data);
-    status.textContent = `Done — verdict: ${data.report?.verdict || 'unknown'}`;
+    const tot = data.report?.total != null ? (data.report.total * 100).toFixed(0) + '%' : '—';
+    status.textContent = `Done — ${tot} similar to template`;
   } catch (e) {
     status.textContent = 'Compare failed: ' + e.message;
   } finally {
     btn.disabled = false;
   }
+}
+
+function buildSimilarityBlock(r) {
+  const total = r.total != null ? r.total : null;
+  const pct = total != null ? Math.round(total * 100) : null;
+  const thr = r.thresholds || {};
+  // Target band derived from the active profile: warn (low) .. pass (high).
+  const warn = thr.warn != null ? thr.warn : 0.65;
+  const pass = thr.pass != null ? thr.pass : 0.85;
+  const lo = Math.min(warn, pass), hi = Math.max(warn, pass);
+  const profile = r.profile || _fidelityProfile || 'balanced';
+  const profileLabel = (typeof _PROFILE_LABELS !== 'undefined' && _PROFILE_LABELS[profile]) || profile;
+
+  const bandLeft = (lo * 100).toFixed(0);
+  const bandWidth = ((hi - lo) * 100).toFixed(0);
+  const markerLeft = total != null ? (total * 100).toFixed(0) : 50;
+
+  let note;
+  if (total == null) {
+    note = 'Could not measure similarity.';
+  } else if (total < lo) {
+    note = `Your page is <strong>more customized</strong> than the template — expected if you are diverging from the original. For <strong>${profileLabel}</strong>, the template-match target is ${bandLeft}–${(hi * 100).toFixed(0)}%.`;
+  } else if (total > hi) {
+    note = `Your page is <strong>very close to the template</strong> — even more faithful than <strong>${profileLabel}</strong> requires. Great if you want a near-identical look.`;
+  } else {
+    note = `On target for <strong>${profileLabel}</strong>: close enough to feel like the template, while staying your own customizable page.`;
+  }
+
+  return `
+    <div class="similarity-block">
+      <div class="similarity-head">
+        <span class="similarity-title">Template similarity</span>
+        <span class="similarity-pct">${pct != null ? pct + '%' : '—'}</span>
+      </div>
+      <div class="similarity-track">
+        <div class="similarity-band" style="left:${bandLeft}%;width:${bandWidth}%;" title="Target zone for ${escapeHtml(String(profileLabel))}"></div>
+        <div class="similarity-marker" style="left:${markerLeft}%;"></div>
+      </div>
+      <div class="similarity-ends">
+        <span>Your own design</span>
+        <span>Near-identical to template</span>
+      </div>
+      <div class="similarity-note">${note}</div>
+    </div>`;
+}
+
+function issueRow(axis, text, quote) {
+  const known = ['content', 'visual', 'layout', 'structure', 'assets'];
+  const cls = known.includes(axis) ? axis : 'info';
+  const label = cls === 'info' ? 'Note' : cls;
+  const quoteHtml = quote ? `<span class="issue-quote">“${escapeHtml(quote)}”</span>` : '';
+  return `<div class="issue-row">
+    <span class="issue-pill ${cls}">${label}</span>
+    <span class="issue-text">${escapeHtml(text)}${quoteHtml}</span>
+  </div>`;
+}
+
+function prettyWorstSection(w) {
+  const axis = w.axis || '';
+  const section = String(w.section || '');
+  if (axis === 'content' && section.startsWith('text:')) {
+    return issueRow('content', 'Text from the template is not on your page yet', section.slice(5));
+  }
+  if (axis === 'visual') {
+    const n = section.replace('tile-', '');
+    return issueRow('visual', `Visual area ${n} looks different from the template`);
+  }
+  if (axis === 'structure') {
+    return issueRow('structure', `Missing section landmark: ${section}`);
+  }
+  if (axis === 'layout') {
+    return issueRow('layout', `Section “${section}” is placed differently than the template`);
+  }
+  if (axis === 'assets' && section.startsWith('asset:')) {
+    return issueRow('assets', `Template image not reused: ${section.slice(6)}`);
+  }
+  return issueRow(axis, section);
+}
+
+function prettyGate(g) {
+  const s = String(g);
+  let m = s.match(/text coverage\s+([\d.]+)\s*<\s*([\d.]+)/);
+  if (m) {
+    const have = Math.round(parseFloat(m[1]) * 100);
+    const want = Math.round(parseFloat(m[2]) * 100);
+    return issueRow('content', `Only ${have}% of the template’s text is on your page (target ${want}%)`);
+  }
+  if (/landmark order/i.test(s)) {
+    return issueRow('structure', 'Section order differs from the template');
+  }
+  m = s.match(/layout:\s*(\S+)\s+IoU/);
+  if (m) {
+    return issueRow('layout', `Section “${m[1]}” is positioned differently than the template`);
+  }
+  if (/^assets:/i.test(s)) {
+    const missing = (s.match(/missing:\s*([^)]+)\)/) || [])[1];
+    return issueRow('assets', missing
+      ? `Template images not reused: ${missing.trim()}`
+      : 'Some template images are not reused yet');
+  }
+  return issueRow('info', s.replace(/^[a-z]+:\s*/i, ''));
 }
 
 function renderCompareResults(data) {
@@ -478,8 +721,6 @@ function renderCompareResults(data) {
   const el = document.getElementById('compare-results');
   document.getElementById('compare-placeholder').style.display = 'none';
   el.style.display = 'block';
-  const verdict = r.verdict || 'unknown';
-  const total = r.total != null ? (r.total * 100).toFixed(0) + '%' : '—';
   const axisNames = ['content', 'structure', 'layout', 'visual'];
   let scoresHtml = axisNames.map(a => {
     const raw = axes[a]?.raw;
@@ -490,21 +731,20 @@ function renderCompareResults(data) {
     `<img src="${u}?t=${Date.now()}" alt="source tile">`).join('');
   const outImgs = (data.output_tiles || []).map(u =>
     `<img src="${u}?t=${Date.now()}" alt="output tile">`).join('');
-  const gates = (r.gate_failures || []).map(g => `<li>${escapeHtml(g)}</li>`).join('');
-  const worst = (r.worst_sections || []).slice(0, 5).map(w =>
-    `<li>${escapeHtml(w.section || '')} (${w.axis || ''})</li>`).join('');
+  const gates = (r.gate_failures || []).map(prettyGate).join('');
+  const worst = (r.worst_sections || []).slice(0, 5).map(prettyWorstSection).join('');
   const heat = data.heatmap
     ? `<h4 style="font-size:11px;color:#a8a29e;text-transform:uppercase;margin:12px 0 6px;">Diff heatmap</h4>
        <img id="compare-heatmap" src="${data.heatmap}?t=${Date.now()}" alt="diff heatmap">` : '';
   el.innerHTML = `
-    <div class="compare-verdict ${verdict}">Verdict: ${verdict.toUpperCase()} · Total ${total}</div>
+    ${buildSimilarityBlock(r)}
     <div class="compare-scores">${scoresHtml}</div>
     <div class="compare-shots">
       <div class="compare-col"><h4>Source</h4>${srcImgs || '<p style="font-size:12px;color:#a8a29e;">No tiles</p>'}</div>
       <div class="compare-col"><h4>Output</h4>${outImgs || '<p style="font-size:12px;color:#a8a29e;">No tiles</p>'}</div>
     </div>
-    ${gates ? `<div class="compare-issues"><strong>Gate failures</strong><ul>${gates}</ul></div>` : ''}
-    ${worst ? `<div class="compare-issues"><strong>Worst sections</strong><ul>${worst}</ul></div>` : ''}
+    ${gates ? `<div class="issue-group"><div class="issue-group-title">Template elements you could still add</div>${gates}</div>` : ''}
+    ${worst ? `<div class="issue-group"><div class="issue-group-title">Sections least like the template</div>${worst}</div>` : ''}
     ${heat}`;
 }
 
@@ -628,27 +868,69 @@ async function resetAllSessions(e) {
   document.getElementById('sessions').innerHTML = '';
 }
 
-// --- Divider resize ---
+// --- Side panel: Chat | Tokens tabs + collapse + width resize ---
 {
-  const divider = document.getElementById('divider');
-  const chat = document.getElementById('chat');
+  const body = document.getElementById('builder-body');
+  const panel = document.getElementById('side-panel');
+  const divider = document.getElementById('side-divider');
+  const panelToggle = document.getElementById('panel-toggle');
+  const sideClose = document.getElementById('side-close');
 
+  let _panelOpen = localStorage.getItem('side_panel_open') !== '0';
+  let _sideTab = localStorage.getItem('side_panel_tab') || 'chat';
+  const savedWidth = parseInt(localStorage.getItem('side_panel_width') || '', 10);
+  if (savedWidth && savedWidth >= 260) panel.style.width = savedWidth + 'px';
+
+  function setPanelOpen(open) {
+    _panelOpen = open;
+    localStorage.setItem('side_panel_open', open ? '1' : '0');
+    body.classList.toggle('panel-closed', !open);
+    panelToggle.classList.toggle('active', open);
+  }
+
+  function setSideTab(name) {
+    _sideTab = name;
+    localStorage.setItem('side_panel_tab', name);
+    document.querySelectorAll('.side-tab').forEach(b =>
+      b.classList.toggle('active', b.dataset.side === name));
+    document.querySelectorAll('.side-content').forEach(c =>
+      c.classList.toggle('active', c.id === `side-${name}`));
+    if (name === 'tokens' && window.loadTokensPanel) window.loadTokensPanel();
+  }
+
+  window.setSideTab = setSideTab;
+  window.openSidePanel = () => setPanelOpen(true);
+
+  document.querySelectorAll('.side-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!_panelOpen) setPanelOpen(true);
+      setSideTab(btn.dataset.side);
+    });
+  });
+  panelToggle.addEventListener('click', () => setPanelOpen(!_panelOpen));
+  sideClose.addEventListener('click', () => setPanelOpen(false));
+
+  setSideTab(_sideTab);
+  setPanelOpen(_panelOpen);
+
+  // Drag divider to resize panel width
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;cursor:row-resize;display:none;';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:col-resize;display:none;';
   document.body.appendChild(overlay);
-
   divider.addEventListener('mousedown', (e) => {
     divider.classList.add('active');
     overlay.style.display = 'block';
     e.preventDefault();
   });
   overlay.addEventListener('mousemove', (e) => {
-    const h = window.innerHeight - e.clientY - 3;
-    chat.style.height = Math.max(100, Math.min(window.innerHeight * 0.6, h)) + 'px';
+    const w = window.innerWidth - e.clientX - 3;
+    const clamped = Math.max(260, Math.min(window.innerWidth * 0.6, w));
+    panel.style.width = clamped + 'px';
   });
   overlay.addEventListener('mouseup', () => {
     divider.classList.remove('active');
     overlay.style.display = 'none';
+    localStorage.setItem('side_panel_width', parseInt(panel.style.width, 10) || 380);
   });
 }
 
@@ -662,6 +944,7 @@ function connectSSE() {
     } else if (data.event === 'html_updated') {
       preview.src = '/preview?' + Date.now();
       loadTokensPanel();
+      if (window.loadHistoryPanel) window.loadHistoryPanel();
       if (_activeView === 'code') loadCodeView();
     }
   };
@@ -744,14 +1027,6 @@ function connectSSE() {
     }
   };
 
-  window.resetChatState = function() {
-    chatBusy = false;
-    input.disabled = false;
-    sendBtn.disabled = false;
-    if (thinkingEl && thinkingEl.parentNode) thinkingEl.remove();
-    thinkingEl = null; assistantEl = null; assistantText = '';
-  };
-
   sendBtn.addEventListener('click', () => {
     const text = input.value.trim();
     if (text) { input.value = ''; sendChatMessage(text); }
@@ -765,38 +1040,132 @@ function connectSSE() {
   });
 }
 
-// --- Reset ---
-async function resetAll() {
-  await fetch('/chat/reset', { method: 'POST' }).catch(() => {});
-  document.getElementById('chat-messages').innerHTML = '';
-  if (window.resetChatState) window.resetChatState();
-  window._sessionId = null;
-  _targetUrl = null;
-  history.replaceState(null, '', location.pathname);
-  preview.src = '/preview?' + Date.now();
-  builder.classList.remove('active');
-  landing.classList.remove('hidden');
-  document.getElementById('url-input').value = '';
-  loadSessions();
-}
-
-// --- Design Tokens panel ---
+// --- History view (left content tab) ---
 {
-  const tokensPanel = document.getElementById('tokens-panel');
-  const tokensToggle = document.getElementById('tokens-toggle');
-  const tokensList = document.getElementById('tokens-list');
-  let _tokenDebounce = null;
-  let _tokensOpen = localStorage.getItem('tokens_panel_open') === '1';
+  const historyList = document.getElementById('history-list');
+  const historyDiff = document.getElementById('history-diff');
+  const historyDiffHeader = document.getElementById('history-diff-header');
+  const revertBtn = document.getElementById('revert-last-btn');
 
-  function setTokensPanelOpen(open) {
-    _tokensOpen = open;
-    localStorage.setItem('tokens_panel_open', open ? '1' : '0');
-    tokensPanel.classList.toggle('open', open);
-    tokensToggle.classList.toggle('active', open);
+  function formatHistoryTime(ts) {
+    if (!ts || ts.length < 15) return ts || '';
+    const y = ts.slice(0, 4), mo = ts.slice(4, 6), d = ts.slice(6, 8);
+    const h = ts.slice(9, 11), mi = ts.slice(11, 13);
+    return `${y}-${mo}-${d} ${h}:${mi} UTC`;
   }
 
-  tokensToggle.addEventListener('click', () => setTokensPanelOpen(!_tokensOpen));
-  if (_tokensOpen) setTokensPanelOpen(true);
+  function colorizeDiff(text) {
+    return text.split('\n').map(line => {
+      const esc = escapeHtml(line);
+      if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
+        return `<span class="diff-hunk">${esc}</span>`;
+      }
+      if (line.startsWith('+')) return `<span class="diff-add">${esc}</span>`;
+      if (line.startsWith('-')) return `<span class="diff-del">${esc}</span>`;
+      return esc;
+    }).join('\n');
+  }
+
+  async function showHistoryDiff(seq, label) {
+    historyDiffHeader.textContent = `Diff: ${label} → current`;
+    historyDiff.innerHTML = '<span style="color:#a8a29e">Loading…</span>';
+    try {
+      const res = await fetch(`/history/diff?seq=${seq}`);
+      const data = await res.json();
+      const text = data.diff || '(no changes)';
+      historyDiff.innerHTML = colorizeDiff(text);
+    } catch (e) {
+      historyDiff.textContent = 'Could not load diff.';
+    }
+  }
+
+  async function rollbackSeq(seq) {
+    try {
+      const res = await fetch('/history/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seq }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        showToast(data.error, true);
+        return;
+      }
+      showToast(`Restored snapshot #${seq}`);
+      preview.src = '/preview?' + Date.now();
+      loadHistoryPanel();
+      if (_activeView === 'code') loadCodeView();
+    } catch (e) {
+      showToast('Rollback failed.', true);
+    }
+  }
+
+  async function loadHistoryPanel() {
+    try {
+      const res = await fetch('/history');
+      const data = await res.json();
+      const entries = data.entries || [];
+      revertBtn.disabled = entries.length === 0;
+      historyList.innerHTML = '';
+      if (!entries.length) {
+        historyList.innerHTML = '<p id="history-empty">Edits will appear here after the first change.</p>';
+        historyDiff.textContent = '';
+        historyDiffHeader.textContent = 'Select a snapshot to view its diff vs current.';
+        return;
+      }
+      for (const entry of entries) {
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        const label = entry.label || `change-${entry.seq}`;
+        row.innerHTML = `
+          <div class="history-label">#${entry.seq} — ${escapeHtml(label)}</div>
+          <div class="history-meta">${formatHistoryTime(entry.ts)} · ${entry.size || 0} bytes</div>
+          <div class="history-actions">
+            <button type="button" data-action="diff" data-seq="${entry.seq}">View diff</button>
+            <button type="button" data-action="rollback" data-seq="${entry.seq}">Rollback</button>
+          </div>`;
+        historyList.appendChild(row);
+      }
+      historyList.querySelectorAll('button[data-action="diff"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const seq = +btn.dataset.seq;
+          const entry = entries.find(e => e.seq === seq);
+          showHistoryDiff(seq, entry?.label || `snapshot-${seq}`);
+        });
+      });
+      historyList.querySelectorAll('button[data-action="rollback"]').forEach(btn => {
+        btn.addEventListener('click', () => rollbackSeq(+btn.dataset.seq));
+      });
+    } catch (_) {}
+  }
+
+  revertBtn.addEventListener('click', async () => {
+    revertBtn.disabled = true;
+    try {
+      const res = await fetch('/history/revert-last', { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        showToast(data.error, true);
+        return;
+      }
+      showToast('Reverted last change');
+      preview.src = '/preview?' + Date.now();
+      loadHistoryPanel();
+      if (_activeView === 'code') loadCodeView();
+    } catch (e) {
+      showToast('Revert failed.', true);
+    } finally {
+      revertBtn.disabled = false;
+    }
+  });
+
+  window.loadHistoryPanel = loadHistoryPanel;
+}
+
+// --- Design Tokens (side panel tab) ---
+{
+  const tokensList = document.getElementById('tokens-list');
+  let _tokenDebounce = null;
 
   function hexFromColorValue(val) {
     const s = String(val).trim();
@@ -999,6 +1368,7 @@ connectSSE();
     landing.classList.add('hidden');
     builder.classList.add('active');
     loadTokensPanel();
+    if (window.loadHistoryPanel) loadHistoryPanel();
 
     // Load chat history + session metadata (target URL for Compare)
     fetch(`/chat/history/${sessionId}`).then(r => r.json()).then(data => {
