@@ -12,8 +12,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-OUTPUT_DIR = Path("output")
-OUTPUT_FILE = OUTPUT_DIR / "index.html"
+from builder_config import OUTPUT_DIR, OUTPUT_FILE
+
 HISTORY_DIR = OUTPUT_DIR / ".history"
 INDEX_FILE = HISTORY_DIR / "index.json"
 MAX_ENTRIES = 50

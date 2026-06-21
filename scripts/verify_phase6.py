@@ -106,6 +106,34 @@ def test_decisions_recorded_on_active_run():
     _with_temp_store(body)
 
 
+def test_faithfulness_escalation_after_low_first_round():
+    def body():
+        convergence.begin_run("https://x.test", "more_faithful", session_id="sE")
+        convergence.record_round(_report(0.5, "fail", ["hero"]))
+        assert convergence.faithfulness_escalation_note("more_faithful") is None
+        convergence.record_round(_report(0.55, "fail", ["hero"]))
+        note = convergence.faithfulness_escalation_note("more_faithful")
+        assert note is not None
+        assert "ESCALATION MODE" in note
+        assert convergence.faithfulness_escalation_note("balanced") is None
+        convergence.end_run()
+        print("ok test_faithfulness_escalation_after_low_first_round")
+
+    _with_temp_store(body)
+
+
+def test_faithfulness_escalation_skipped_when_first_ok():
+    def body():
+        convergence.begin_run("https://x.test", "more_faithful", session_id="sF")
+        convergence.record_round(_report(0.85, "pass", []))
+        convergence.record_round(_report(0.86, "pass", []))
+        assert convergence.faithfulness_escalation_note("more_faithful") is None
+        convergence.end_run()
+        print("ok test_faithfulness_escalation_skipped_when_first_ok")
+
+    _with_temp_store(body)
+
+
 def test_empty_run_not_persisted():
     def body():
         convergence.begin_run("https://x.test", "balanced", session_id="sC")
@@ -121,5 +149,7 @@ if __name__ == "__main__":
     test_state_persists_per_session_and_live_active()
     test_baseline_stored_for_ab()
     test_decisions_recorded_on_active_run()
+    test_faithfulness_escalation_after_low_first_round()
+    test_faithfulness_escalation_skipped_when_first_ok()
     test_empty_run_not_persisted()
     print("All Phase 6 checks passed.")

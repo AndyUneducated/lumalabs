@@ -7,7 +7,7 @@ Insights view can draw the score curve and the "first build -> final"
 delta — concrete evidence that the look -> measure -> fix loop beats a
 single naked generation.
 
-The agent loop is serialized by the agent lock in server.py, so there is at
+The agent loop is serialized by the agent lock in server_state.py, so there is at
 most one active run at a time; a module-level global is safe.
 """
 
@@ -22,6 +22,24 @@ STORE_PATH = Path("data/convergence.json")
 MAX_RUNS_PER_SESSION = 8
 MAX_WORST = 6
 _AXES = ("content", "structure", "layout", "visual", "assets")
+
+# First self-check total below this → from round 2 onward inject aggressive mimic hints.
+FAITHFUL_ESCALATE_FIRST_TOTAL_MAX = 0.56
+
+_FAITHFUL_ESCALATION_TEXT = """\
+--- ESCALATION MODE (more_faithful, round 2+) ---
+Your **first** self-check total was below target. For the rest of this build, **prioritize pixel-level match over tidy abstractions** — the user chose maximum faithfulness.
+
+**Overrides for this turn:**
+- Prefer a **full `write_html`** with the complete document over many small `edit_section` calls if layout or visual scores still lag.
+- You **may** use **inline styles** on stubborn nodes (exact gradients, shadows, letter-spacing) when `:root` variables cannot match the capture.
+- **Mirror the source DOM shape more literally** — extra wrapper `div`s, same flex/grid structure, fixed heights/widths if needed to align with screenshots.
+- Re-verify **every** manifest asset (logo, hero, backgrounds, fonts); fix missing or wrong URLs before typography tweaks.
+- If content/structure gates fail, copy visible headings and nav labels from the capture text outline before polishing CSS.
+
+Stop escalating once `compare_to_target` shows a clear jump in total + visual; then you may tidy slightly if time allows.
+"""
+
 
 # Active run for the in-progress agent turn (None when idle).
 _active: dict | None = None
@@ -125,6 +143,26 @@ def record_round(report: dict) -> dict | None:
     rnd = _round_from_report(report, len(_active["rounds"]) + 1)
     _active["rounds"].append(rnd)
     return rnd
+
+
+def faithfulness_escalation_note(profile: str) -> str | None:
+    """If more_faithful and round-1 score was low, tell the model to mimic harder from round 2+."""
+    if profile != "more_faithful" or _active is None:
+        return None
+    rounds = _active.get("rounds") or []
+    if len(rounds) < 2:
+        return None
+    first = rounds[0]
+    t = first.get("total")
+    if t is None:
+        return None
+    try:
+        first_total = float(t)
+    except (TypeError, ValueError):
+        return None
+    if first_total >= FAITHFUL_ESCALATE_FIRST_TOTAL_MAX:
+        return None
+    return _FAITHFUL_ESCALATION_TEXT
 
 
 def record_decision(

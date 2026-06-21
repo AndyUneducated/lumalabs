@@ -15,12 +15,13 @@ from urllib.parse import urlparse
 
 from playwright.async_api import Browser, Page, Playwright, async_playwright
 
+from builder_config import SHOTS_DIR
+
 VIEWPORT_WIDTH = 1280
 VIEWPORT_HEIGHT = 900
 TILE_HEIGHT = 1400
 MAX_TILES = 4
 NAV_TIMEOUT_MS = 30_000
-SHOTS_DIR = Path("output") / ".shots"
 
 _BROWSER_ERROR_PATTERNS: list[tuple[tuple[str, ...], str]] = [
     (("timeout", "timed out"), "This page took too long to load. We saved whatever we could from the DOM."),

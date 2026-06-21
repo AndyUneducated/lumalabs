@@ -24,13 +24,13 @@ flowchart TD
 
 | Step | What | Where |
 |------|------|--------|
-| S2.1 | Text coverage + order | [`compare.py`](../compare.py) `score_content` |
-| S2.2 | Skeleton / landmark order | [`compare.py`](../compare.py) `score_structure` |
-| S2.3 | Section bounding-box IoU | [`compare.py`](../compare.py) `score_layout` |
-| S2.4 | SSIM + pHash per tile | [`compare.py`](../compare.py) `score_visual` |
-| S2.5 | Weighted report + two-layer thresholds | [`compare.py`](../compare.py) `fidelity_report` |
-| S2.6 | `compare_to_target(url)` MCP tool | [`tools.py`](../tools.py) |
-| S2.7 | Prompt loop + batch script | [`server.py`](../server.py), [`scripts/fidelity_batch.py`](../scripts/fidelity_batch.py) |
+| S2.1 | Text coverage + order | [`compare/axes.py`](../compare/axes.py) `score_content` |
+| S2.2 | Skeleton / landmark order | [`compare/axes.py`](../compare/axes.py) `score_structure` |
+| S2.3 | Section bounding-box IoU | [`compare/axes.py`](../compare/axes.py) `score_layout` |
+| S2.4 | SSIM + pHash per tile | [`compare/visual.py`](../compare/visual.py) `score_visual` |
+| S2.5 | Weighted report + two-layer thresholds | [`compare/report.py`](../compare/report.py) `fidelity_report` |
+| S2.6 | `compare_to_target(url)` MCP tool | [`tools/handlers_fidelity.py`](../tools/handlers_fidelity.py) |
+| S2.7 | Prompt loop + batch script | [`routes/agent_route.py`](../routes/agent_route.py), [`scripts/fidelity_batch.py`](../scripts/fidelity_batch.py) |
 | Capture | Compare payload from DOM | [`browser.py`](../browser.py) `_EXTRACT_COMPARE_JS`, `capture_compare()` |
 
 ## Threshold design (two layers)

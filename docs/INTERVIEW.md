@@ -289,7 +289,7 @@ How do we prove this phase’s definition of done?
 | Choice | Why | What we did not do | ADR |
 |--------|-----|---------------------|-----|
 | Four axes (not visual-only) | Catches missing copy/sections pixels miss | Single SSIM number | [`0006`](ADR.md#adr-0006) |
-| Pure `compare.py` | Unit-testable without browser | Mix metrics into `browser.py` | [`0006`](ADR.md#adr-0006) |
+| Pure `compare/` package | Unit-testable without browser | Mix metrics into `browser.py` | [`0006`](ADR.md#adr-0006) |
 | Local numpy SSIM + pHash | Light deps | scikit-image | [`0006`](ADR.md#adr-0006) |
 | Hard gates + normalized total | Prevents false pass | One global threshold | [`0006`](ADR.md#adr-0006) |
 | Target cache per URL | Avoid re-fetching target each compare round | Re-capture every call | [`0006`](ADR.md#adr-0006) |

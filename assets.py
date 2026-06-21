@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -16,9 +17,9 @@ from browser import NAV_TIMEOUT_MS, _browser_lock, _navigate, _new_page, _slug_f
 ASSETS_DIR = Path("output") / "assets"
 FONTS_DIR = ASSETS_DIR / "fonts"
 MANIFEST_PATH = ASSETS_DIR / "manifest.json"
-MAX_URL_ASSETS = 50
-MAX_INLINE_SVGS = 8
-MAX_FONTS = 6
+MAX_URL_ASSETS = 110
+MAX_INLINE_SVGS = 14
+MAX_FONTS = 10
 
 _EXTRACT_ASSETS_JS = """
 () => {
@@ -46,13 +47,21 @@ _EXTRACT_ASSETS_JS = """
   const icon = document.querySelector('link[rel~="icon"], link[rel="shortcut icon"]');
   if (icon && icon.href) addUrl(icon.href, 'favicon', { hint: 'favicon' });
 
+  for (const l of document.querySelectorAll('link[rel~="apple-touch-icon"]')) {
+    if (l.href) addUrl(l.href, 'favicon', { hint: 'apple-touch-icon' });
+  }
+  for (const m of document.querySelectorAll('meta[property="og:image"], meta[name="og:image"]')) {
+    const c = m.getAttribute('content');
+    if (c) addUrl(c, 'hero', { hint: 'og-image' });
+  }
+
   for (const link of document.querySelectorAll('link[rel="preload"][as="font"]')) {
     if (link.href) addUrl(link.href, 'font', { family: null });
   }
 
   let imgCount = 0;
   for (const img of document.querySelectorAll('img')) {
-    if (imgCount++ > 80) break;
+    if (imgCount++ > 120) break;
     const rect = img.getBoundingClientRect();
     if (rect.width < 4 || rect.height < 4) continue;
     const id = (img.id || '').toLowerCase();
@@ -79,9 +88,20 @@ _EXTRACT_ASSETS_JS = """
     }
   }
 
+  for (const src of document.querySelectorAll('picture > source')) {
+    const sset = src.getAttribute('srcset');
+    const single = src.getAttribute('src');
+    const raw = (sset || single || '').split(',')[0].trim().split(/\\s+/)[0];
+    if (raw) addUrl(raw, 'image', { w: 0, h: 0, top: 0, hint: 'picture-source' });
+  }
+  for (const v of document.querySelectorAll('video[poster]')) {
+    const p = v.getAttribute('poster');
+    if (p) addUrl(p, 'hero', { hint: 'video-poster', w: 0, h: 0, top: 0 });
+  }
+
   let bgCount = 0;
   for (const el of document.querySelectorAll('*')) {
-    if (bgCount++ > 200) break;
+    if (bgCount++ > 420) break;
     const rect = el.getBoundingClientRect();
     if (rect.width < 8 || rect.height < 8) continue;
     const cs = getComputedStyle(el);
@@ -102,7 +122,7 @@ _EXTRACT_ASSETS_JS = """
   const inlineSvgs = [];
   let svgCount = 0;
   for (const svg of document.querySelectorAll('svg')) {
-    if (svgCount++ > 20) break;
+    if (svgCount++ > 28) break;
     const rect = svg.getBoundingClientRect();
     if (rect.width < 8 || rect.height < 8) continue;
     let role = 'icon';
@@ -215,6 +235,18 @@ async def _download_asset(page: Page, url: str, dest: Path) -> bool:
         return False
 
 
+async def _scroll_for_lazy_assets(page: Page) -> None:
+    """Scroll so lazy-loaded images and backgrounds resolve."""
+    try:
+        for _ in range(10):
+            await page.mouse.wheel(0, 1200)
+            await asyncio.sleep(0.1)
+        await page.evaluate("() => window.scrollTo(0, 0)")
+        await asyncio.sleep(0.15)
+    except Exception:
+        pass
+
+
 def _pick_best_role(entries: list[dict], role: str) -> dict | None:
     candidates = [e for e in entries if e.get("role") == role]
     if not candidates:
@@ -253,6 +285,7 @@ async def extract_assets_from_page(page: Page, source_url: str) -> AssetExtractR
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     FONTS_DIR.mkdir(parents=True, exist_ok=True)
     slug = _slug_from_url(source_url)
+    await _scroll_for_lazy_assets(page)
     raw = await page.evaluate(_EXTRACT_ASSETS_JS)
 
     downloaded_files: list[dict] = []
@@ -271,8 +304,13 @@ async def extract_assets_from_page(page: Page, source_url: str) -> AssetExtractR
             downloaded_files.append(
                 {
                     "url": url,
+                    "original_url": url,
                     "role": role,
                     "type": "url",
+                    "top": item.get("top"),
+                    "hint": item.get("hint"),
+                    "w": item.get("w"),
+                    "h": item.get("h"),
                     **_entry(f"assets/{filename}", alt=item.get("alt")),
                 }
             )
@@ -292,6 +330,9 @@ async def extract_assets_from_page(page: Page, source_url: str) -> AssetExtractR
             {
                 "role": role,
                 "type": "inline_svg",
+                "top": svg_item.get("top"),
+                "w": svg_item.get("w"),
+                "h": svg_item.get("h"),
                 **_entry(f"assets/{filename}", w=svg_item.get("w"), h=svg_item.get("h")),
             }
         )
@@ -317,7 +358,9 @@ async def extract_assets_from_page(page: Page, source_url: str) -> AssetExtractR
                 {
                     "family": css_family,
                     "url": url,
+                    "original_url": url,
                     "type": "font",
+                    "top": 0.0,
                     "font_face": font_face,
                     **_entry(rel),
                 }
@@ -326,6 +369,18 @@ async def extract_assets_from_page(page: Page, source_url: str) -> AssetExtractR
     assets_map = _build_assets_map(downloaded_files, font_entries)
     total = len(downloaded_files) + len(font_entries)
 
+    ordered = sorted(
+        [f for f in downloaded_files if f.get("preview_path")],
+        key=lambda x: (
+            float(x["top"])
+            if isinstance(x.get("top"), (int, float))
+            else 1e9,
+            -((x.get("w") or 0) * (x.get("h") or 0)),
+            x.get("preview_path") or "",
+        ),
+    )
+    clone_paths_ordered = [x["preview_path"] for x in ordered]
+
     manifest = {
         "source": source_url,
         "assets": assets_map,
@@ -333,6 +388,8 @@ async def extract_assets_from_page(page: Page, source_url: str) -> AssetExtractR
         "files": downloaded_files,
         "hints": {
             "use_preview_paths": True,
+            "clone_paths_ordered": clone_paths_ordered,
+            "mirrored_url_count": len(downloaded_files),
             "inline_svg": [f for f in downloaded_files if f.get("type") == "inline_svg"],
             "font_faces": [f.get("font_face") for f in font_entries if f.get("font_face")],
         },

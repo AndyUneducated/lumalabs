@@ -46,9 +46,9 @@ flowchart TD
 |------|------|-------|
 | S3.1 | `tokens.py`: canonical vocab, `extract_tokens_from_styles`, `parse_root_vars`, `patch_root_vars`, `categorize`, `rgb_to_hex` | [`tokens.py`](../tokens.py) (new) |
 | S3.1 | Extend style capture with `boxShadow` + radius/spacing samples | [`browser.py`](../browser.py) `_EXTRACT_STYLES_JS` |
-| S3.1 | `extract_design_tokens(url)` MCP tool → token JSON | [`tools.py`](../tools.py) |
+| S3.1 | `extract_design_tokens(url)` MCP tool → token JSON | [`tools/handlers_tokens.py`](../tools/handlers_tokens.py) |
 | S3.2 | Prompt: require `:root` tokens + `var(--…)`; seed via `extract_design_tokens` | [`server.py`](../server.py) `_SYSTEM_PROMPT_BASE`, `_PROFILE_BUILD_RULES` |
-| S3.3 | `read_design_tokens()` + `set_design_token(name, value)` MCP tools | [`tools.py`](../tools.py) |
+| S3.3 | `read_design_tokens()` + `set_design_token(name, value)` MCP tools | [`tools/handlers_tokens.py`](../tools/handlers_tokens.py) |
 | S3.3 | `GET /tokens` + `POST /tokens` (panel, no LLM) | [`server.py`](../server.py) |
 | S3.4 | Design Tokens panel (list, color pickers, live write-back) | [`viewer.html`](../viewer.html) |
 | S3.5 | Unit checks | [`scripts/verify_phase3.py`](../scripts/verify_phase3.py) (new) |

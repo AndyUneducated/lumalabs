@@ -14,7 +14,7 @@ The agent runs via the Claude Code CLI transport and is driven through MCP tools
 
 ```mermaid
 flowchart TD
-    U([user pastes URL]) --> Q["server _run_agent → client.query"]
+    U([user pastes URL]) --> Q["agent_loop.run_agent → client.query"]
     Q --> A[agent]
     A -->|"capture_site(url)"| CS["browser.py: Playwright"]
     CS --> PNG1["save PNG(s) to output/.shots/"]
@@ -36,11 +36,11 @@ flowchart TD
 | Step | What was built | Where |
 |------|------------------|--------|
 | S1.1 | Pinned `playwright==1.60.0`; install Chromium with `python -m playwright install chromium` | [`requirements.txt`](../requirements.txt) |
-| S1.2 | Reused Chromium, tiled `capture_url`, `capture_file`; `capture_site` / `screenshot_output` tools | [`browser.py`](../browser.py), [`tools.py`](../tools.py) |
-| S1.3 | MCP handler passes through structured `content` (text + image) | [`tools.py`](../tools.py) `_make_handler`, `_normalize_tool_result` |
+| S1.2 | Reused Chromium, tiled `capture_url`, `capture_file`; `capture_site` / `screenshot_output` tools | [`browser.py`](../browser.py), [`tools/handlers_capture.py`](../tools/handlers_capture.py) |
+| S1.3 | MCP handler passes through structured `content` (text + image) | [`tools/schema_mcp.py`](../tools/schema_mcp.py) `_make_handler`, [`tools/mcp_media.py`](../tools/mcp_media.py) `normalize_tool_result` |
 | S1.4 | `page.evaluate` style JSON (palette, typography, sections, samples) | [`browser.py`](../browser.py) `_EXTRACT_STYLES_JS` |
-| S1.5 | `screenshot_output()` → `capture_file(output/index.html)` | [`tools.py`](../tools.py) |
-| S1.6 | System prompt: look → build → self-check → iterate (cap 2–3 rounds in prose) | [`server.py`](../server.py) `SYSTEM_PROMPT` |
+| S1.5 | `screenshot_output()` → `capture_file(output/index.html)` | [`tools/handlers_capture.py`](../tools/handlers_capture.py) |
+| S1.6 | System prompt: look → build → self-check → iterate (cap 2–3 rounds in prose) | [`prompts.py`](../prompts.py) `build_system_prompt` |
 | S1.7 | Lock, nav timeout, DOM-only fallback; `close_browser()` on app shutdown | [`browser.py`](../browser.py), [`server.py`](../server.py) `lifespan` |
 
 Screenshots on disk: `output/.shots/` (under gitignored `output/`).

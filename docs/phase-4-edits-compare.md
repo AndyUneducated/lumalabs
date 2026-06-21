@@ -27,10 +27,10 @@ flowchart TD
 |------|------|--------|
 | S4.1 | `data-section` anchors in prompt | [`server.py`](../server.py) `_SYSTEM_PROMPT_BASE` |
 | S4.2 | `replace_section` / `list_sections` | [`sections.py`](../sections.py) |
-| S4.2 | `edit_section` MCP tool | [`tools.py`](../tools.py) |
+| S4.2 | `edit_section` MCP tool | [`tools/handlers_html.py`](../tools/handlers_html.py) |
 | S4.3 | `GET /source` | [`server.py`](../server.py) |
 | S4.4 | Code tab: highlight, Copy, Download, Format | [`viewer.html`](../viewer.html) |
-| S4.6 | `run_fidelity_comparison` shared helper | [`tools.py`](../tools.py) |
+| S4.6 | `run_fidelity_comparison` shared helper | [`tools/handlers_fidelity.py`](../tools/handlers_fidelity.py) |
 | S4.7 | `POST /compare`, `GET /shots/{path}` | [`server.py`](../server.py) |
 | S4.7 | Compare tab UI | [`viewer.html`](../viewer.html) |
 | S4.8 | Unit checks | [`scripts/verify_phase4.py`](../scripts/verify_phase4.py) |

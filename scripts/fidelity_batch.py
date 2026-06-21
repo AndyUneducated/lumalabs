@@ -194,7 +194,7 @@ async def _calibrate_async(html_path: Path) -> dict:
 async def _run_agent_for_url(url: str, profile: str) -> None:
     """Run the website builder agent end-to-end for one benchmark URL."""
     from claude_agent_sdk import ClaudeSDKClient
-    from server import _build_agent_options
+    from agent_loop import _build_agent_options
     from tools import set_fidelity_profile, set_notify_fn
 
     set_notify_fn(lambda _e=None: None)

@@ -16,7 +16,7 @@ This directly supports the README bar: *better than what an AI would produce on 
 
 ```mermaid
 flowchart TD
-    CHAT[POST /chat] --> RUN[_run_agent]
+    CHAT[POST /chat] --> RUN[agent_loop.run_agent]
     RUN --> BEGIN[convergence.begin_run]
     BEGIN --> ACTIVE[(active run in memory)]
     CMP[compare_to_target MCP] --> RPT[fidelity_report]
@@ -39,12 +39,12 @@ flowchart TD
 
 | Step | What | Where |
 |------|------|--------|
-| S6.1 | Begin/end active run per agent turn | [`server.py`](../server.py) `_run_agent` → [`convergence.py`](../convergence.py) `begin_run` / `end_run` |
+| S6.1 | Begin/end active run per agent turn | [`agent_loop.py`](../agent_loop.py) `run_agent` → [`convergence.py`](../convergence.py) `begin_run` / `end_run` |
 | S6.2 | Attach session id when detected | `convergence.set_active_session` from new `.jsonl` or `ResultMessage` |
-| S6.3 | Append round on each compare | [`tools.py`](../tools.py) `compare_to_target` → `record_round` + `_notify("convergence")` |
+| S6.3 | Append round on each compare | [`tools/handlers_fidelity.py`](../tools/handlers_fidelity.py) `compare_to_target` → `record_round` + `_notify("convergence")` |
 | S6.4 | Persist runs + baseline per session | [`convergence.py`](../convergence.py) `data/convergence.json` |
-| S6.5 | Read state for UI | `GET /convergence?session_id=…` in [`server.py`](../server.py) |
-| S6.6 | A/B naked baseline | `POST /ab` → `_run_naked_baseline` → restricted `ClaudeAgentOptions` via `_build_agent_options(tool_subset=…)` |
+| S6.5 | Read state for UI | `GET /convergence?session_id=…` in [`routes/insights.py`](../routes/insights.py) |
+| S6.6 | A/B naked baseline | `POST /ab` → [`agent_loop.py`](../agent_loop.py) `run_naked_baseline` → restricted `ClaudeAgentOptions` via `_build_agent_options(tool_subset=…)` |
 | S6.7 | Insights UI | [`viewer.html`](../viewer.html) tab `insights`, `loadInsightsPanel`, SSE `convergence` |
 
 ## APIs

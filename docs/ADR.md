@@ -92,7 +92,7 @@ model=os.environ.get("AGENT_MODEL", "haiku"),
 
 ### Consequences and risks
 
-- **Impact**: `server.py` `_build_agent_options`; startup self-check logs the active model.
+- **Impact**: `agent_loop.py` `_build_agent_options`; startup self-check logs the active model.
 - **Risk**: Bad alias → error from CLI; startup log shows `AGENT_MODEL` to help debug.
 
 ---
@@ -202,9 +202,9 @@ The agent could only use `WebFetch` (text) plus `write_html` / `read_html`. It n
 ### Decision
 
 1. Add **`playwright`** (pinned) and **`browser.py`**: headless Chromium, shared browser, `asyncio.Lock`, navigation timeout, tiled PNG captures to `output/.shots/`, plus a compact **computed-style JSON** via `page.evaluate`.
-2. Add MCP tools **`capture_site(url)`** and **`screenshot_output()`** in [`tools.py`](../tools.py): return MCP `content` with **text + `image` blocks** (base64 PNG, `mimeType: image/png`) plus the styles JSON text block.
+2. Add MCP tools **`capture_site(url)`** and **`screenshot_output()`** in [`tools/handlers_capture.py`](../tools/handlers_capture.py): return MCP `content` with **text + `image` blocks** (base64 PNG, `mimeType: image/png`) plus the styles JSON text block.
 3. Extend **`_make_handler`** so tool results that already look like `{"content": [...]}` pass through unchanged; plain strings still become a single text block.
-4. Update **`SYSTEM_PROMPT`** in [`server.py`](../server.py): look (`capture_site`) → build (`write_html`) → self-check (`screenshot_output`) → fix; cap iterations in prose; on nav failure use DOM-only fallback (no images).
+4. Update **`SYSTEM_PROMPT`** in [`prompts.py`](../prompts.py): look (`capture_site`) → build (`write_html`) → self-check (`screenshot_output`) → fix; cap iterations in prose; on nav failure use DOM-only fallback (no images).
 5. Call **`close_browser()`** from FastAPI **`lifespan`** shutdown so Playwright does not leak on reload.
 
 Full step checklist and diagram: [`phase-1-visual-loop.md`](phase-1-visual-loop.md).
@@ -245,9 +245,9 @@ Phase 1 let the agent see pixels and self-check in prose, but "looks close" was 
 
 ### Decision
 
-1. Add **`compare.py`** (pure Python, no Playwright): `score_content`, `score_structure`, `score_layout`, `score_visual` (local windowed SSIM + pHash via Pillow/numpy; no scikit-image), `fidelity_report`, optional `diff_heatmap`.
+1. Add the **`compare/`** package (pure Python, no Playwright): `score_content`, `score_structure`, `score_layout`, `score_visual` (local windowed SSIM + pHash via Pillow/numpy; no scikit-image), `fidelity_report`, optional `diff_heatmap`.
 2. Extend **`browser.py`** with `_EXTRACT_COMPARE_JS` and **`capture_compare()`** returning text blocks, skeleton, section boxes, and tiles.
-3. Add MCP tool **`compare_to_target(url)`** with per-URL target cache in [`tools.py`](../tools.py).
+3. Add MCP tool **`compare_to_target(url)`** with per-URL target cache in [`tools/handlers_fidelity.py`](../tools/handlers_fidelity.py).
 4. **Two-layer thresholds** in [`data/fidelity.json`](../data/fidelity.json): per-axis hard gates (content coverage, landmark order, min block IoU) plus normalized weighted total with pass/warn bands. Floors/ceilings calibrated via `scripts/fidelity_batch.py --calibrate`.
 5. Update **`SYSTEM_PROMPT`**: self-check calls `compare_to_target`, fixes `worst_sections`, stops on pass or iteration cap.
 
@@ -258,7 +258,7 @@ Full plan: [`phase-2-fidelity.md`](phase-2-fidelity.md).
 - Four axes catch different failure modes (missing copy vs misplaced blocks vs pixel drift).
 - Normalizing each axis to `[floor, ceil]` makes a single weighted total meaningful.
 - Hard gates prevent high visual scores from masking missing sections.
-- Pure `compare.py` is unit-testable without a browser.
+- Pure `compare/` package is unit-testable without a browser.
 
 ### Alternatives
 
@@ -294,7 +294,7 @@ Phase 2 scoring exposed a product tension: **semantic, editable HTML** scores lo
 Add a **3-position fidelity knob** wired through one field, `fidelity_profile`:
 
 1. **UI** (`viewer.html`): segmented control on landing + builder toolbar; default **balanced**; persisted in `localStorage`.
-2. **Prompt** (`server.py`): `_PROFILE_BUILD_RULES` appended to system prompt per profile (how to `write_html`).
+2. **Prompt** (`prompts.py`): `_PROFILE_BUILD_RULES` appended to system prompt per profile (how to `write_html`).
 3. **Scoring** (`data/fidelity.json` → `compare.load_config(profile=...)`): per-profile weights, thresholds, and hard gates. **Editable** sets structure weight to 0 and drops structure from `worst_sections`.
 4. **Tool** (`compare_to_target(url, profile=...)`): report includes `profile`; server sets session default via `set_fidelity_profile()` before each agent run.
 
@@ -344,9 +344,9 @@ We did **not** add a separate "1:1 DOM clone" engine — all profiles share the 
    - inline `<svg>` serialized to local `.svg` files
    - `@font-face` URLs downloaded to `output/assets/fonts/`
    Writes `manifest.json` with `preview_path` (`/assets/...`), `fonts`, and `hints.font_faces`.
-2. Serve files via **`GET /assets/{path}`** in [`server.py`](../server.py) so preview uses same-origin paths.
+2. Serve files via **`GET /assets/{path}`** in [`routes/site.py`](../routes/site.py) so preview uses same-origin paths.
 3. **`more_faithful` prompt**: mandatory `extract_assets` after `capture_site`; use manifest paths for img/background/SVG/fonts; forbid wordmark placeholders when mirrored logo exists.
-4. **`asset_coverage`** in [`compare.py`](../compare.py): share of mirrored role assets (logo, favicon, hero, **font** when present) referenced in output HTML.
+4. **`asset_coverage`** in [`compare/axes.py`](../compare/axes.py) `score_assets`: share of mirrored role assets (logo, favicon, hero, **font** when present) referenced in output HTML.
 5. **Enforcement scope**: `asset_coverage` hard gate + weighted axis + `worst_sections` **only when `profile == more_faithful`**. Other profiles report `assets.enforced: false` (informational if manifest exists).
 6. Rename profiles: `editable` → **`more_editable`**, `faithful` → **`more_faithful`** (legacy aliases accepted).
 
@@ -540,8 +540,8 @@ correcting itself, and to *quantify* the loop vs a naked one-shot.
 
 ### Consequences and risks
 
-- **Impact**: new `convergence.py`, `compare_to_target` hook, `_run_agent`
-  begin/end, `/convergence` + `/ab` endpoints, `_build_agent_options` tool
+- **Impact**: new `convergence.py`, `compare_to_target` hook, `agent_loop.run_agent`
+  begin/end, `/convergence` + `/ab` endpoints (`routes/insights.py`), `_build_agent_options` tool
   subset, Insights view, [`docs/phase-6-self-convergence.md`](phase-6-self-convergence.md), `scripts/verify_phase6.py`.
 - **Risk**: active-run global assumes one run at a time (true under the agent
   lock). A/B baseline depends on a live Claude run; failures return a friendly

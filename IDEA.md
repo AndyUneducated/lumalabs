@@ -338,7 +338,7 @@ flowchart TD
 ```
 
 - **S1.1 Playwright**: Add deps + `playwright install chromium`; minimal script saves one PNG for a URL.
-- **S1.2 `capture_site(url)` (screenshot only)**: Add in `tools.py`, register in `TOOL_HANDLERS`.
+- **S1.2 `capture_site(url)` (screenshot only)**: Add in `tools/handlers_capture.py`, register in `TOOL_HANDLERS`.
 - **S1.3 Multimodal**: Pass screenshot as image input with the chat to Claude.
 - **S1.4 `capture_site` + DOM/computed styles**: Add structured style data next to the screenshot.
 - **S1.5 `screenshot_output()`**: Screenshot `output/index.html`.
@@ -381,7 +381,7 @@ flowchart TD
     end
     SRC --> EXTRACT
     OUT --> EXTRACT
-    subgraph extract [compare.py extractors]
+    subgraph extract [compare/ package]
         EXTRACT["normalize"] --> TXT["text: visible text, normalized"]
         EXTRACT --> SKEL["structure: landmark/tag skeleton + section order"]
         EXTRACT --> BOX["layout: section bounding boxes (normalized)"]
@@ -401,12 +401,12 @@ flowchart TD
     FIX --> OUT
 ```
 
-- **S2.1 `compare.py` text metric**: Extract visible text from source and output DOM; normalize (collapse whitespace, trim). Report **text coverage** (share of source's meaningful text blocks present in output) and **order correlation**. Pure-Python, no new deps.
+- **S2.1 `compare/` text metric**: Extract visible text from source and output DOM; normalize (collapse whitespace, trim). Report **text coverage** (share of source's meaningful text blocks present in output) and **order correlation**. Pure-Python, no new deps.
 - **S2.2 Structure skeleton metric**: Build a normalized sequence/tree of landmarks (`header/nav/main/section/footer/h1–h3/button/img/[data-section]`). Compare with sequence alignment or tree edit distance → **structural similarity** + exact landmark-order match flag.
 - **S2.3 Layout (geometry) metric**: From each DOM, read normalized bounding boxes of key sections (x/y/w/h ÷ viewport). Match source→output sections (by tag + order), compute **mean IoU** and per-section offset. This is layout fidelity that ignores color/text.
 - **S2.4 Visual metric (thresholded)**: Align tiles to the same 1280 width and tile height; compute **SSIM** per tile and a **pHash** Hamming distance; aggregate to a visual score and a per-tile diff. Deps: `Pillow` + `numpy` (optional `scikit-image` for SSIM; otherwise a small local SSIM).
 - **S2.5 `fidelity_report()` aggregator**: Weighted total (suggest content 0.30, structure 0.20, layout 0.30, visual 0.20) with a per-axis breakdown and a ranked list of **worst sections**. Thresholds (tunable in `data/`): pass ≥ 0.85, warn 0.70–0.85, fail < 0.70; hard sub-gates e.g. text coverage ≥ 0.95, landmark order exact.
-- **S2.6 `compare_to_target()` tool**: New tool in `tools.py` that caches the target capture for the session, runs `compare.py` against current `output/index.html`, and returns the report JSON (+ optional diff image block). Register in `TOOL_HANDLERS`.
+- **S2.6 `compare_to_target()` tool**: Implemented in `tools/handlers_fidelity.py`; caches the target capture for the session, runs `compare/` scoring against current `output/index.html`, and returns the report JSON (+ optional diff image block). Registered in `TOOL_HANDLERS`.
 - **S2.7 Loop + gate integration**: Update `SYSTEM_PROMPT` so step 3 calls `compare_to_target()` and fixes the **named worst sections**; stop when total ≥ pass or max iters hit. Add a batch script that writes a per-site, per-axis report into `data/`.
 - **S2.8 Fidelity knob (implemented)**: UI 3-segment control (**more_editable / balanced / more_faithful**); `fidelity_profile` on `/chat` drives prompt + compare. Default **balanced**. ADR [`0007`](docs/ADR.md#adr-0007).
 - **S2.9 Asset mirroring (implemented)**: `extract_assets(url)` + `asset_coverage` (enforced in **more_faithful** only). ADR [`0008`](docs/ADR.md#adr-0008).
