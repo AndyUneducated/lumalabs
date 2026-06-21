@@ -140,7 +140,7 @@ How do we prove this phase’s definition of done?
 ### What we ship in this phase (product)
 
 1. **Repro env**: `requirements.txt` pins main deps so `pip install -r requirements.txt` gives the same result on a new machine.
-2. **Model config**: Switch `sonnet` / `haiku` / etc. with `AGENT_MODEL` (default `opus`) without code edits.
+2. **Model config**: Switch `sonnet` / `opus` / etc. with `AGENT_MODEL` (default `haiku`) without code edits.
 3. **Startup self-check**: On boot, the terminal prints the active model, Claude CLI transport source, and whether `.env` exists (no secret leak).
 4. **Benchmark URL set**: `data/benchmarks.json` lists 4 fixed sites for later vision work and regression.
 5. **Doc setup**: `docs/ADR.md`, [`docs/phase-1-visual-loop.md`](phase-1-visual-loop.md), and this file; we extend them each phase.
@@ -150,7 +150,7 @@ How do we prove this phase’s definition of done?
 | Choice | Why | What we did not do | ADR |
 |--------|-----|---------------------|-----|
 | Keep Claude Agent SDK + CLI | Matches starter; MCP tools wired; CLI login is enough to run | Raw Anthropic API, Ollama | [`0001`](ADR.md#adr-0001) |
-| `AGENT_MODEL` env var, default opus | Easy cost vs quality switch; fits close copy goal | Hard-coded model, CLI-only flag | [`0002`](ADR.md#adr-0002) |
+| `AGENT_MODEL` env var, default haiku | Cheap local iteration; override with `opus` for closer copy | Hard-coded model, CLI-only flag | [`0002`](ADR.md#adr-0002) |
 | stderr self-check in lifespan | Fixes “why no `.env` still works”; zero secret leak | `/health` exposing config | [`0003`](ADR.md#adr-0003) |
 | `data/benchmarks.json` | Matches `data/` layout; easy for scripts | Hard-coded URLs in code | [`0004`](ADR.md#adr-0004) |
 
@@ -174,9 +174,9 @@ How do we prove this phase’s definition of done?
 
 **Answer:** Auth uses **Claude Code CLI login**, not `ANTHROPIC_API_KEY` in this project. The self-check prints the transport path; `.env` only shows if the file exists, not the key.
 
-#### Q2: Why default `opus` instead of `haiku`?
+#### Q2: Why default `haiku` instead of `opus`?
 
-**Answer:** The README wants output **very close** to the target site. `opus` fits that. For dev cost, use `AGENT_MODEL=haiku`.
+**Answer:** Local dev and take-home iteration are cheaper with `haiku`. For a final demo or when you need the strongest layout and copy match, set `AGENT_MODEL=opus` in `.env` and restart.
 
 #### Q3: Why these four benchmark sites?
 

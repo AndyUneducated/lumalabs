@@ -69,17 +69,17 @@ The starter uses `ClaudeSDKClient` from `claude-agent-sdk`. By default it uses `
 
 ### Decision
 
-Set the model alias with env var **`AGENT_MODEL`**. **Default is `opus`**. Support SDK aliases like `sonnet`, `haiku`, `inherit`. Put `AGENT_MODEL=opus` in `.env.example`.
+Set the model alias with env var **`AGENT_MODEL`**. **Default is `haiku`** (lowest cost for local iteration). Support SDK aliases like `sonnet`, `opus`, `inherit`. Put `AGENT_MODEL=haiku` in `.env.example`; use `opus` when you need a closer visual copy.
 
 ```python
-model=os.environ.get("AGENT_MODEL", "opus"),
+model=os.environ.get("AGENT_MODEL", "haiku"),
 ```
 
 ### Rationale
 
 - You can switch quality, speed, and cost for dev or demo without code edits.
 - `load_dotenv()` already runs at startup in `server.py`, same pattern as `.env`.
-- Default `opus` fits the README goal of a close visual copy.
+- Default `haiku` keeps day-to-day dev cheap; final demos can set `AGENT_MODEL=opus`.
 
 ### Alternatives
 

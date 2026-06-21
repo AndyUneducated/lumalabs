@@ -243,19 +243,31 @@ def score_structure(src: dict, out: dict) -> dict[str, Any]:
     }
 
 
+def _box_dims(box: dict) -> tuple[float, float, float, float]:
+    """Safe x,y,w,h for compare payloads (missing keys → 0)."""
+    try:
+        x = float(box.get("x", 0))
+        y = float(box.get("y", 0))
+        w = float(box.get("w", 0))
+        h = float(box.get("h", 0))
+    except (TypeError, ValueError):
+        return 0.0, 0.0, 0.0, 0.0
+    return x, y, max(w, 0.0), max(h, 0.0)
+
+
 def _box_iou(a: dict, b: dict) -> float:
-    ax1, ay1 = a["x"], a["y"]
-    ax2, ay2 = ax1 + a["w"], ay1 + a["h"]
-    bx1, by1 = b["x"], b["y"]
-    bx2, by2 = bx1 + b["w"], by1 + b["h"]
+    ax1, ay1, aw, ah = _box_dims(a)
+    bx1, by1, bw, bh = _box_dims(b)
+    ax2, ay2 = ax1 + aw, ay1 + ah
+    bx2, by2 = bx1 + bw, by1 + bh
     ix1, iy1 = max(ax1, bx1), max(ay1, by1)
     ix2, iy2 = min(ax2, bx2), min(ay2, by2)
     iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
     inter = iw * ih
     if inter <= 0:
         return 0.0
-    area_a = max(a["w"] * a["h"], 1e-9)
-    area_b = max(b["w"] * b["h"], 1e-9)
+    area_a = max(aw * ah, 1e-9)
+    area_b = max(bw * bh, 1e-9)
     return inter / (area_a + area_b - inter)
 
 
@@ -669,10 +681,33 @@ def fidelity_report(
     }
 
 
+def _colorize_diff(diff: np.ndarray) -> np.ndarray:
+    """Map a 0..255 grayscale diff to a blue→green→yellow→red RGB heatmap."""
+    norm = np.clip(diff / 255.0, 0.0, 1.0)
+    # Piecewise gradient: 0=blue (cold/identical) → 1=red (hot/different).
+    stops = np.array(
+        [
+            [0.0, 0.10, 0.30, 0.60],   # position
+            [13, 71, 255, 255],        # R
+            [27, 200, 235, 40],        # G
+            [120, 120, 30, 30],        # B
+        ]
+    )
+    pos = stops[0]
+    r = np.interp(norm, pos, stops[1])
+    g = np.interp(norm, pos, stops[2])
+    b = np.interp(norm, pos, stops[3])
+    return np.stack([r, g, b], axis=-1).astype(np.uint8)
+
+
 def diff_heatmap(
     src_tiles: list[Path], out_tiles: list[Path]
 ) -> Path | None:
-    """Save a horizontal strip of per-tile absolute-diff heatmaps."""
+    """Save a color diff heatmap (blue=match, red=large difference).
+
+    The per-pixel absolute grayscale difference is colorized and blended over
+    a dimmed copy of the output screenshot so differences are easy to locate.
+    """
     if not src_tiles or not out_tiles:
         return None
 
@@ -686,15 +721,25 @@ def diff_heatmap(
         out_arr = _load_gray_array(out_tiles[i])
         a, b = _align_arrays(src_arr, out_arr)
         diff = np.abs(a - b)
-        diff_img = Image.fromarray(diff.astype(np.uint8), mode="L")
-        strips.append(diff_img.convert("RGB"))
+
+        heat = _colorize_diff(diff)
+
+        # Dimmed grayscale output as the base so the heat colors read clearly.
+        base_h, base_w = diff.shape
+        base = (b[:base_h, :base_w] * 0.35).astype(np.uint8)
+        base_rgb = np.stack([base, base, base], axis=-1)
+
+        # Blend more heat where the difference is larger.
+        alpha = np.clip(diff / 255.0, 0.0, 1.0)[..., None] * 0.85
+        blended = (base_rgb * (1 - alpha) + heat * alpha).astype(np.uint8)
+        strips.append(Image.fromarray(blended, mode="RGB"))
 
     if not strips:
         return None
 
     total_h = sum(s.height for s in strips)
     max_w = max(s.width for s in strips)
-    canvas = Image.new("RGB", (max_w, total_h), (0, 0, 0))
+    canvas = Image.new("RGB", (max_w, total_h), (10, 12, 30))
     y = 0
     for strip in strips:
         canvas.paste(strip, (0, y))

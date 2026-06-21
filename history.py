@@ -104,9 +104,13 @@ def restore(seq: int) -> dict:
     if not entry:
         return {"error": f"Snapshot {seq} not found."}
 
-    snap_path = HISTORY_DIR / entry["file"]
+    fname = entry.get("file")
+    if not fname:
+        return {"error": "Snapshot record missing file path."}
+
+    snap_path = HISTORY_DIR / fname
     if not snap_path.is_file():
-        return {"error": f"Snapshot file missing: {entry['file']}"}
+        return {"error": f"Snapshot file missing: {fname}"}
 
     content = snap_path.read_text()
     save_output(content, f"rollback-{seq}")
@@ -118,7 +122,11 @@ def revert_last() -> dict:
     entries = _load_index()
     if not entries:
         return {"error": "No history yet. Make an edit after the initial page."}
-    return restore(int(entries[-1]["seq"]))
+    last = entries[-1]
+    seq = last.get("seq")
+    if seq is None:
+        return {"error": "History index is corrupt (missing seq)."}
+    return restore(int(seq))
 
 
 def diff(seq: int | None = None) -> str:
@@ -134,9 +142,13 @@ def diff(seq: int | None = None) -> str:
         if not entry:
             return f"# Snapshot {seq} not found\n"
 
-    snap_path = HISTORY_DIR / entry["file"]
+    dfname = entry.get("file")
+    if not dfname:
+        return "# Snapshot record missing file path\n"
+
+    snap_path = HISTORY_DIR / dfname
     if not snap_path.is_file():
-        return f"# Snapshot file missing: {entry['file']}\n"
+        return f"# Snapshot file missing: {dfname}\n"
 
     if not OUTPUT_FILE.is_file():
         return "# No current output\n"
@@ -147,7 +159,7 @@ def diff(seq: int | None = None) -> str:
         difflib.unified_diff(
             from_lines,
             to_lines,
-            fromfile=f"snapshot-{entry['seq']}",
+            fromfile=f"snapshot-{entry.get('seq', '?')}",
             tofile="current",
             lineterm="",
         )

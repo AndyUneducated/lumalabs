@@ -30,7 +30,8 @@ _version = 0
 OUTPUT_DIR = Path("output")
 OUTPUT_FILE = OUTPUT_DIR / "index.html"
 SESSIONS_DIR = Path.home() / ".claude" / "projects"
-AGENT_MODEL = os.environ.get("AGENT_MODEL", "opus")
+# Cheapest default for local dev; set AGENT_MODEL=opus in .env for closer copies.
+AGENT_MODEL = os.environ.get("AGENT_MODEL", "haiku")
 
 
 def _detect_claude_transport() -> str:
@@ -156,6 +157,10 @@ async def preview():
 async def serve_asset(asset_path: str):
     """Serve mirrored assets from output/assets/ for faithful previews."""
     base = Path("output") / "assets"
+    # Tolerate an accidentally duplicated leading "assets/" segment
+    # (older output may reference /assets/assets/<file>).
+    if asset_path.startswith("assets/"):
+        asset_path = asset_path[len("assets/"):]
     file_path = (base / asset_path).resolve()
     if not str(file_path).startswith(str(base.resolve())):
         return HTMLResponse("Forbidden", status_code=403)
@@ -387,7 +392,11 @@ def _build_system_prompt(profile: str) -> str:
     from compare import resolve_profile
 
     prof = resolve_profile(profile)
-    return _SYSTEM_PROMPT_BASE.format(profile_rules=_PROFILE_BUILD_RULES[prof])
+    # Do not use str.format() on the base prompt: it contains literal `:root { }`,
+    # which Python treats as a format field named " " and raises KeyError(' ').
+    return _SYSTEM_PROMPT_BASE.replace(
+        "{profile_rules}", _PROFILE_BUILD_RULES[prof]
+    )
 
 
 _agent_lock = asyncio.Lock()
@@ -397,7 +406,6 @@ def _build_agent_options(
     resume_session: str | None = None,
     fidelity_profile: str = "balanced",
 ):
-    import sys
     from claude_agent_sdk import ClaudeAgentOptions
     from tools import create_tool_server, TOOL_NAMES, SERVER_NAME
 
@@ -406,10 +414,10 @@ def _build_agent_options(
     cs = create_tool_server()
     mcp_tool_names = [f"mcp__{SERVER_NAME}__{name}" for name in TOOL_NAMES]
 
-    print(
-        f"[agent] Tools: {mcp_tool_names}, resume={resume_session}, "
-        f"profile={fidelity_profile}",
-        file=sys.stderr,
+    _log(
+        "agent",
+        f"options: {len(mcp_tool_names)} tools, "
+        f"resume={resume_session or '-'}, profile={fidelity_profile}",
     )
 
     return ClaudeAgentOptions(
@@ -431,14 +439,49 @@ def _build_agent_options(
 
 
 def _push_chat(data: dict):
-    import sys
     encoded = json.dumps({"version": _version, "event": "chat", "chat": data})
-    print(f"[chat] {data.get('type')}: {str(data.get('text', ''))[:80]}", file=sys.stderr)
+    # text/tool/done are already logged inline; only surface control events here.
+    dtype = data.get("type")
+    if dtype == "session":
+        _log("chat", f"session {data.get('session_id', '')}")
+    elif dtype == "error":
+        _log("chat", f"error: {str(data.get('text', ''))[:80]}")
     for q in list(_subscribers):
         try:
             q.put_nowait(encoded)
         except asyncio.QueueFull:
             pass
+
+
+def _log(tag: str, line: str, skipped: int = 0) -> None:
+    """Tagged stderr log line. `skipped` collapses preceding noise events."""
+    import sys
+
+    skip = f" \033[2m(skip {skipped})\033[0m" if skipped else ""
+    print(f"[{tag}]{skip} {line}".rstrip(), file=sys.stderr)
+
+
+def _tool_arg_hint(tool_input) -> str:
+    """Short, human-readable hint of a tool call's key argument."""
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in ("url", "selector", "name", "profile", "path"):
+        val = tool_input.get(key)
+        if val:
+            return f" {key}={str(val)[:60]}"
+    return ""
+
+
+def _format_agent_error(exc: BaseException) -> str:
+    """Human-readable error for SSE; many SDK errors have an empty str()."""
+    name = type(exc).__name__
+    msg = (str(exc) or "").strip()
+    if msg:
+        return f"{name}: {msg}"
+    rep = repr(exc).strip()
+    if rep and rep not in (name + "()", f"{name}()"):
+        return f"{name}: {rep}"
+    return f"{name} (no message — check server terminal for traceback)"
 
 
 _agent_busy = False
@@ -513,11 +556,17 @@ async def chat(req: ChatRequest):
 
 def _task_done(task):
     import sys
-    if task.exception():
-        print(f"[agent] TASK EXCEPTION: {task.exception()}", file=sys.stderr)
-        import traceback
-        traceback.print_exception(type(task.exception()), task.exception(), task.exception().__traceback__, file=sys.stderr)
-        _push_chat({"type": "error", "text": str(task.exception())})
+    import traceback
+
+    try:
+        exc = task.exception()
+    except asyncio.CancelledError:
+        return
+    if exc is None:
+        return
+    _log("error", f"task exception: {exc!r}")
+    traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+    _push_chat({"type": "error", "text": _format_agent_error(exc)})
 
 
 async def _run_agent(
@@ -530,7 +579,6 @@ async def _run_agent(
     async with _agent_lock:
         _agent_busy = True
         try:
-            import sys
             from claude_agent_sdk import ClaudeSDKClient
             from compare import resolve_profile
             from tools import set_fidelity_profile
@@ -542,7 +590,7 @@ async def _run_agent(
                 fidelity_profile=prof,
             )
 
-            print(f"[agent] Starting (resume={session_id}): {message[:80]}", file=sys.stderr)
+            _log("agent", f"start (resume={session_id or '-'}): {message[:80]}")
 
             seen_texts = set()
             session_pushed = False
@@ -571,13 +619,13 @@ async def _run_agent(
                                     "fidelity_profile": prof,
                                 }
                                 _save_sessions()
-                            print(f"[agent] Session: {new_sid}", file=sys.stderr)
                             break
                         await asyncio.sleep(0.1)
 
+                noise_count = 0
+
                 async for msg in client.receive_response():
                     msg_type = type(msg).__name__
-                    print(f"[agent] msg: {msg_type}", file=sys.stderr)
 
                     if hasattr(msg, "content"):
                         for block in getattr(msg, "content", []):
@@ -586,6 +634,23 @@ async def _run_agent(
                                 if text and text not in seen_texts:
                                     seen_texts.add(text)
                                     _push_chat({"type": "text", "text": text})
+                                    _log("text", text[:100], skipped=noise_count)
+                                    noise_count = 0
+                            elif getattr(block, "type", None) == "tool_use" or hasattr(
+                                block, "name"
+                            ):
+                                tool = getattr(block, "name", "?")
+                                tool = tool.split("__")[-1]
+                                hint = _tool_arg_hint(getattr(block, "input", None))
+                                _log("tool", f"{tool}{hint}", skipped=noise_count)
+                                noise_count = 0
+                            elif getattr(block, "type", None) == "tool_result":
+                                noise_count += 1
+                            else:
+                                noise_count += 1
+                    else:
+                        # SystemMessage / RateLimitEvent / heartbeats — just count.
+                        noise_count += 1
 
                     if hasattr(msg, "result") and msg.result:
                         text = msg.result.strip()
@@ -607,13 +672,12 @@ async def _run_agent(
                             }
                             _save_sessions()
 
+            _log("agent", "done", skipped=noise_count)
             _push_chat({"type": "done"})
-            print("[agent] Done", file=sys.stderr)
 
         except Exception as e:
-            import sys
-            print(f"[agent] Error: {e}", file=sys.stderr)
-            _push_chat({"type": "error", "text": str(e)})
+            _log("error", f"agent: {e!r}")
+            _push_chat({"type": "error", "text": _format_agent_error(e)})
         finally:
             _agent_busy = False
 

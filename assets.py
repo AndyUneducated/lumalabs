@@ -184,15 +184,17 @@ def _url_suggests_logo(url: str) -> bool:
 
 
 def _entry(local_rel: str, **extra) -> dict:
-    """Build manifest entry with preview_path under /assets/."""
-    name = Path(local_rel).name
-    sub = Path(local_rel).parent.as_posix()
-    if sub and sub != ".":
-        preview = f"/assets/{sub}/{name}"
-    else:
-        preview = f"/assets/{name}"
+    """Build manifest entry with preview_path under /assets/.
+
+    local_rel is relative to output/ (e.g. "assets/foo.png" or
+    "assets/fonts/x.woff2"). The /assets/{path} route maps straight to
+    output/assets/, so the URL is just "/" + local_rel — prepending another
+    "assets/" segment would produce a 404 (/assets/assets/...).
+    """
+    local = local_rel.replace("\\", "/")
+    preview = "/" + local
     return {
-        "local": local_rel.replace("\\", "/"),
+        "local": local,
         "preview_path": preview,
         **extra,
     }

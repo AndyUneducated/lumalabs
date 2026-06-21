@@ -98,6 +98,14 @@ def _shot_prefix(source: str) -> tuple[Path, str]:
     return SHOTS_DIR, f"{slug}-{ts}"
 
 
+async def _safe_close_page_context(page: Page) -> None:
+    """Close the page's browser context; ignore if already closed (hot-reload / shutdown)."""
+    try:
+        await page.context.close()
+    except Exception:
+        pass
+
+
 async def _new_page() -> Page:
     browser = await _ensure_browser()
     context = await browser.new_context(
@@ -124,8 +132,12 @@ async def _tile_screenshot(page: Page, prefix: str) -> list[Path]:
         if height <= 0:
             break
         out = SHOTS_DIR / f"{base}-{i + 1}.png"
+        # full_page=True is required so clip can address rows below the
+        # viewport; without it a clip at y>=viewport height (or taller than
+        # the viewport) raises "Clipped area is ... outside the resulting image".
         await page.screenshot(
             path=str(out),
+            full_page=True,
             clip={"x": 0, "y": y, "width": VIEWPORT_WIDTH, "height": height},
             type="png",
         )
@@ -367,7 +379,7 @@ async def capture_url(url: str) -> CaptureResult:
                     source=url,
                 )
         finally:
-            await page.context.close()
+            await _safe_close_page_context(page)
 
 
 async def capture_file(file_path: Path) -> CaptureResult:
@@ -395,7 +407,7 @@ async def capture_file(file_path: Path) -> CaptureResult:
                 source=file_url,
             )
         finally:
-            await page.context.close()
+            await _safe_close_page_context(page)
 
 
 async def capture_compare(source: str, *, is_file: bool = False) -> CaptureResult:
@@ -447,4 +459,4 @@ async def capture_compare(source: str, *, is_file: bool = False) -> CaptureResul
                     source=target,
                 )
         finally:
-            await page.context.close()
+            await _safe_close_page_context(page)
