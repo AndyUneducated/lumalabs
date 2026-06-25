@@ -10,6 +10,78 @@ Find a marketing site or landing page with a design you admire — Stripe's home
 
 ---
 
+## This Submission
+
+> Full rationale in [`APPROACH.md`](APPROACH.md). Plan + roadmap in [`IDEA.md`](IDEA.md). Decisions in [`docs/ADR.md`](docs/ADR.md).
+
+One agent, **10 MCP tools**, and a measured `look → build → measure → fix` loop that beats a naked one-shot by **+0.23 mean fidelity** on the benchmark set.
+
+```mermaid
+flowchart LR
+    URL([URL]) --> CAP[capture_site<br/>screenshot + styles]
+    CAP --> TOK[extract_design_tokens]
+    CAP --> ASSET[extract_assets]
+    TOK --> BUILD[write_html]
+    ASSET --> BUILD
+    BUILD --> CMP[compare_to_target<br/>4-axis score]
+    CMP --> GATE{pass?}
+    GATE -- "fix worst_sections" --> EDIT[edit_section / set_design_token]
+    EDIT --> CMP
+    GATE -- yes --> DONE([accept + refine in chat])
+```
+
+**Tools** (beyond the scaffold's `write_html` / `read_html`):
+
+| Tool | Role |
+|------|------|
+| `capture_site` / `screenshot_output` | Tiled screenshots + computed styles (the agent's eyes) |
+| `extract_design_tokens` / `read_design_tokens` / `set_design_token` | `:root` CSS vars = single source of truth for rebrand |
+| `extract_assets` | Mirror logo / hero / SVG / fonts to `output/assets/` |
+| `compare_to_target` | 4-axis fidelity report (content · structure · layout · visual) + diff heatmap |
+| `edit_section` | Surgical one-block edit, no full rewrite |
+
+**UI surfaces**: live Preview · Code · Compare · **Insights** (convergence curve + A/B) · **History** (snapshot / diff / rollback).
+
+### Fidelity profiles
+
+| Profile | Optimizes | Asset gate |
+|---------|-----------|:----------:|
+| `more_editable` | clean, semantic code | off |
+| `balanced` *(default)* | layout + visual match | off |
+| `more_faithful` | pixel + real assets | ≥ 0.75 |
+
+### Architecture
+
+| Module | Responsibility |
+|--------|----------------|
+| `server.py` + `routes/` | FastAPI app + routers (site, sse, compare, insights, history, tokens, agent) |
+| `server_state.py` | SSE broadcast + session/lock state (no app import cycle) |
+| `agent_loop.py` | Claude SDK options + `look→build→measure→fix` run loop |
+| `prompts.py` | Profile-aware system prompts |
+| `tools/` | MCP tool implementations + schema generation |
+| `compare/` | Pure-Python fidelity scoring (no Playwright) |
+| `browser.py` · `assets.py` · `tokens.py` · `sections.py` · `history.py` · `convergence.py` | Capture, asset mirror, tokens, edits, snapshots, A/B |
+
+### Run & verify
+
+```bash
+pip install -r requirements.txt
+python -m playwright install chromium     # screenshots need Chromium
+cp .env.example .env                       # Claude CLI login also works
+AGENT_MODEL=opus python server.py          # opus = closest copy; haiku = cheap dev
+
+# unit + script checks (no browser needed)
+python scripts/verify_phase2.py   # fidelity scoring
+python scripts/verify_phase3.py   # design tokens
+python scripts/verify_phase4.py   # section edits
+python scripts/verify_phase5.py   # history / rollback / errors
+python scripts/verify_phase6.py   # convergence + A/B
+```
+
+**Recommended model**: `AGENT_MODEL=opus` for the closest visual copy; `haiku` (default) for cheap iteration ([ADR 0002](docs/ADR.md#adr-0002)).
+
+---
+
 ## Getting Started
 
 A scaffold is provided: a server, a live preview, a chat interface, and two tools (`write_html`, `read_html`, plus builtins) wired to the Claude Agent SDK.
