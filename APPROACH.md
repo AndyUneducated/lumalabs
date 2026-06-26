@@ -5,6 +5,8 @@
 
 **Companion docs**: [`IDEA.md`](IDEA.md) (full plan) · [`docs/ADR.md`](docs/ADR.md) (decisions) · [`docs/INTERVIEW.md`](docs/INTERVIEW.md) (per-phase notes)
 
+**Live links**: **[GitHub Pages — start here](https://andyuneducated.github.io/lumalabs/)** · [Repository](https://github.com/AndyUneducated/lumalabs) · [Video](https://youtu.be/hoTlBtaU-bI)
+
 ---
 
 ## 1. Thesis
@@ -164,7 +166,7 @@ flowchart LR
 
 Concurrency capped by `CAPTURE_WORKERS`; per-client quota via `X-API-Key` + `QUOTA_PER_HOUR`. Jobs persist under `data/jobs/`.
 
-Deploy: Docker + `render.yaml`; landing page on GitHub Pages (`docs/`). See [docs/DEPLOY.md](docs/DEPLOY.md).
+Deploy: Docker + `render.yaml`; landing page on GitHub Pages: **https://andyuneducated.github.io/lumalabs/** (`docs/`). See [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ---
 

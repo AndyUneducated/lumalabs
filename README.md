@@ -1,5 +1,9 @@
 # Luma Take-Home — Agentic Website Builder
 
+> **Reviewer start here:** [**https://andyuneducated.github.io/lumalabs/**](https://andyuneducated.github.io/lumalabs/) — live landing page with one-command local setup guide.
+>
+> **One-liner to run the full app:** `git clone https://github.com/AndyUneducated/lumalabs.git && cd lumalabs && chmod +x run.sh && ./run.sh` → http://localhost:8000
+
 You're building the prototype of a product that lets anyone create a landing page by pointing at one they love.
 
 Find a marketing site or landing page with a design you admire — Stripe's homepage, a YC startup's landing page, a beautifully designed product page. Paste the URL, and an AI agent creates a clean, customizable template very closely inspired by that design. Then you tweak it through conversation: "Swap the hero image," "Make the CTA more prominent," "Use our brand colors."
@@ -11,6 +15,12 @@ Find a marketing site or landing page with a design you admire — Stripe's home
 ---
 
 ## This Submission
+
+| Link | URL |
+|------|-----|
+| **GitHub Pages** (landing + local run guide) | https://andyuneducated.github.io/lumalabs/ |
+| **Repository** | https://github.com/AndyUneducated/lumalabs |
+| **Video walkthrough** | https://youtu.be/hoTlBtaU-bI |
 
 > Full rationale in [`APPROACH.md`](APPROACH.md). Plan + roadmap in [`IDEA.md`](IDEA.md). Decisions in [`docs/ADR.md`](docs/ADR.md).
 
