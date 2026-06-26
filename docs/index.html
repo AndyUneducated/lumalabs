@@ -1,132 +1,516 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Luma Take-Home — Agentic Website Builder</title>
-  <meta name="description" content="Paste a URL, get a near-pixel landing page template, refine in chat." />
+  <meta name="description" content="粘贴 URL，AI 生成可编辑落地页模板，本地一键运行完整体验。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0a0f;
-      --card: #14141c;
-      --text: #f4f4f8;
-      --muted: #9b9bb0;
-      --accent: #635bff;
-      --accent-hover: #7a73ff;
-      --border: #2a2a38;
+      --bg: #08090d;
+      --bg-2: #0f1118;
+      --card: #14161f;
+      --card-hover: #1a1d28;
+      --text: #eef0f6;
+      --muted: #9499ad;
+      --dim: #6b7186;
+      --accent: #6d5efc;
+      --accent-2: #8b7cff;
+      --accent-glow: rgba(109, 94, 252, 0.35);
+      --green: #3ecf8e;
+      --amber: #f5b942;
+      --border: rgba(255,255,255,0.08);
+      --radius: 14px;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: Inter, system-ui, sans-serif;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: 880px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
-    h1 { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.75rem; }
-    .lead { color: var(--muted); font-size: 1.125rem; margin-bottom: 2rem; }
+    .glow {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(109,94,252,0.22), transparent),
+        radial-gradient(ellipse 60% 40% at 100% 50%, rgba(62,207,142,0.06), transparent);
+    }
+    .wrap { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+
+    /* Nav */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.25rem 0; border-bottom: 1px solid var(--border); margin-bottom: 3rem;
+    }
+    .logo { font-weight: 700; font-size: 0.95rem; letter-spacing: -0.02em; }
+    .logo span { color: var(--accent-2); }
+    .nav-links { display: flex; gap: 1.5rem; font-size: 0.875rem; }
+    .nav-links a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero { text-align: center; margin-bottom: 3.5rem; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.85rem; border-radius: 999px;
+      background: rgba(109,94,252,0.12); border: 1px solid rgba(109,94,252,0.3);
+      font-size: 0.75rem; font-weight: 600; color: var(--accent-2); margin-bottom: 1.25rem;
+    }
+    .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    h1 {
+      font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.15; margin-bottom: 1rem;
+    }
+    .hero p { color: var(--muted); font-size: 1.1rem; max-width: 620px; margin: 0 auto 1.75rem; }
+    .hero-cta { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.35rem; border-radius: 10px; font-weight: 600;
+      font-size: 0.9rem; text-decoration: none; transition: all 0.15s; cursor: pointer; border: none;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-2); box-shadow: 0 0 24px var(--accent-glow); }
+    .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--card); border-color: rgba(255,255,255,0.15); }
+
+    /* Screenshots / mockups */
+    .showcase { margin-bottom: 4rem; }
+    .showcase-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;
+    }
+    @media (max-width: 768px) { .showcase-grid { grid-template-columns: 1fr; } }
+    .browser {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .browser:hover { transform: translateY(-4px); border-color: rgba(109,94,252,0.35); }
+    .browser-wide { grid-column: 1 / -1; }
+    .chrome {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1rem;
+      background: var(--bg-2); border-bottom: 1px solid var(--border);
+    }
+    .dots { display: flex; gap: 5px; }
+    .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+    .dots i:nth-child(1) { background: #ff5f57; }
+    .dots i:nth-child(2) { background: #febc2e; }
+    .dots i:nth-child(3) { background: #28c840; }
+    .url-bar {
+      flex: 1; margin-left: 0.5rem; padding: 0.3rem 0.75rem; border-radius: 6px;
+      background: var(--bg); font-size: 0.7rem; color: var(--dim); font-family: var(--mono);
+    }
+    .screen { padding: 1rem; min-height: 200px; }
+    .screen-label {
+      font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--dim); margin-bottom: 0.75rem;
+    }
+
+    /* Mock UI inside screenshots */
+    .mock-landing { text-align: center; padding: 2rem 1rem; }
+    .mock-landing h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .mock-landing p { font-size: 0.75rem; color: var(--dim); margin-bottom: 1rem; }
+    .mock-input-row { display: flex; gap: 0.5rem; max-width: 320px; margin: 0 auto; }
+    .mock-input {
+      flex: 1; padding: 0.5rem 0.75rem; border-radius: 8px;
+      background: var(--bg-2); border: 1px solid var(--border);
+      font-size: 0.7rem; color: var(--muted); text-align: left;
+    }
+    .mock-go {
+      padding: 0.5rem 1rem; border-radius: 8px; background: var(--accent);
+      font-size: 0.7rem; font-weight: 600; color: #fff;
+    }
+    .mock-workspace {
+      display: grid; grid-template-columns: 1fr 280px; gap: 0; min-height: 220px;
+      font-size: 0.65rem;
+    }
+    .mock-preview {
+      background: linear-gradient(180deg, #1a1f35 0%, #0d1020 100%);
+      padding: 1rem; border-right: 1px solid var(--border);
+    }
+    .mock-stripe { background: #635bff; height: 28px; border-radius: 4px; margin-bottom: 0.75rem; width: 60%; }
+    .mock-hero { background: rgba(255,255,255,0.06); height: 48px; border-radius: 6px; margin-bottom: 0.5rem; }
+    .mock-cards { display: flex; gap: 0.4rem; }
+    .mock-card { flex: 1; height: 36px; background: rgba(255,255,255,0.04); border-radius: 4px; }
+    .mock-chat {
+      background: var(--bg-2); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;
+    }
+    .mock-bubble {
+      padding: 0.45rem 0.6rem; border-radius: 8px; max-width: 90%;
+      line-height: 1.4;
+    }
+    .mock-bubble.user { background: var(--accent); color: #fff; align-self: flex-end; }
+    .mock-bubble.ai { background: var(--card); color: var(--muted); align-self: flex-start; }
+    .mock-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 0.75rem;
+    }
+    .mock-tab {
+      padding: 0.4rem 0.75rem; font-size: 0.65rem; color: var(--dim);
+    }
+    .mock-tab.on { color: var(--accent-2); border-bottom: 2px solid var(--accent); }
+    .mock-compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+    }
+    .mock-pane {
+      background: var(--bg-2); border-radius: 6px; padding: 0.5rem; min-height: 100px;
+      border: 1px solid var(--border);
+    }
+    .mock-pane span { font-size: 0.6rem; color: var(--dim); }
+    .mock-score {
+      display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.5rem;
+    }
+    .mock-pill {
+      padding: 0.2rem 0.45rem; border-radius: 4px; font-size: 0.55rem; font-weight: 600;
+      background: rgba(62,207,142,0.15); color: var(--green);
+    }
+
+    /* Sections */
+    section { margin-bottom: 3.5rem; }
+    .section-head { margin-bottom: 1.5rem; }
+    .section-head h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+    .section-head p { color: var(--muted); font-size: 0.95rem; }
+
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.25rem;
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1.5rem; margin-bottom: 1rem;
     }
-    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
-    .card p, .card li { color: var(--muted); font-size: 0.95rem; }
+    .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
+    .card p, .card li { color: var(--muted); font-size: 0.9rem; }
     .card ul { margin: 0.5rem 0 0 1.25rem; }
-    a.btn {
-      display: inline-block;
-      margin-top: 0.75rem;
-      padding: 0.65rem 1.25rem;
-      background: var(--accent);
-      color: #fff;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 0.95rem;
+    .card li { margin-bottom: 0.35rem; }
+
+    .why-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
     }
-    a.btn:hover { background: var(--accent-hover); }
-    a.link { color: var(--accent-hover); }
-    code {
-      background: #1e1e2a;
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      font-size: 0.85em;
-    }
-    .api-demo { margin-top: 1rem; }
-    .api-demo pre {
-      background: #0e0e14;
+    @media (max-width: 700px) { .why-grid { grid-template-columns: 1fr; } }
+    .why-item {
+      padding: 1.25rem; border-radius: 12px; background: var(--bg-2);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-      overflow-x: auto;
-      font-size: 0.8rem;
-      color: #c8c8d8;
     }
-    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; }
+    .why-item .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .why-item h4 { font-size: 0.9rem; margin-bottom: 0.35rem; }
+    .why-item p { font-size: 0.8rem; color: var(--dim); line-height: 1.5; }
+
+    .steps { counter-reset: step; }
+    .step {
+      display: flex; gap: 1.25rem; padding: 1.25rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(109,94,252,0.15); color: var(--accent-2);
+      font-weight: 700; font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-body h4 { font-size: 0.95rem; margin-bottom: 0.35rem; }
+    .step-body p { font-size: 0.85rem; color: var(--muted); }
+
+    .code-block {
+      position: relative; margin-top: 1rem;
+      background: #06070b; border: 1px solid var(--border); border-radius: 12px;
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 1rem; background: var(--bg-2); border-bottom: 1px solid var(--border);
+      font-size: 0.75rem; color: var(--dim);
+    }
+    .copy-btn {
+      padding: 0.3rem 0.7rem; border-radius: 6px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); font-size: 0.7rem; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+    .copy-btn.copied { color: var(--green); border-color: rgba(62,207,142,0.4); }
+    pre {
+      padding: 1rem 1.25rem; overflow-x: auto;
+      font-family: var(--mono); font-size: 0.78rem; line-height: 1.6; color: #c4c8d8;
+    }
+    .cmd { color: var(--green); }
+    .cmt { color: var(--dim); }
+
+    .req-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.75rem; }
+    .req-table th, .req-table td {
+      text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border);
+    }
+    .req-table th { color: var(--dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+    .req-table td { color: var(--muted); }
+    .req-table code { font-family: var(--mono); font-size: 0.8em; color: var(--accent-2); }
+
+    .links-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .link-card {
+      flex: 1; min-width: 140px; padding: 1rem 1.25rem; border-radius: 10px;
+      background: var(--bg-2); border: 1px solid var(--border);
+      text-decoration: none; color: var(--text); transition: border-color 0.15s;
+    }
+    .link-card:hover { border-color: rgba(109,94,252,0.4); }
+    .link-card strong { display: block; font-size: 0.9rem; margin-bottom: 0.2rem; }
+    .link-card span { font-size: 0.75rem; color: var(--dim); }
+
+    footer {
+      text-align: center; padding-top: 2rem; border-top: 1px solid var(--border);
+      color: var(--dim); font-size: 0.8rem;
+    }
+    .lang-note { font-size: 0.8rem; color: var(--dim); margin-top: 0.5rem; }
   </style>
 </head>
 <body>
+  <div class="glow"></div>
   <div class="wrap">
-    <h1>Agentic Website Builder</h1>
-    <p class="lead">
-      Paste a marketing URL → AI agent builds a clean, editable template → refine in chat.
-      <code>look → build → measure → fix</code> loop with 10 MCP tools.
-    </p>
-
-    <div class="card">
-      <h2>Live app</h2>
-      <p>
-        The full app (FastAPI + Playwright + Claude agent) runs on a compute host — not static Pages.
-        Set <code id="api-url">API_URL</code> below after you deploy the Docker image.
-      </p>
-      <a class="btn" id="open-app" href="#">Open builder</a>
-    </div>
-
-    <div class="card">
-      <h2>Scalable capture API</h2>
-      <p>Heavy screenshot work is queued behind a worker pool with per-key quotas.</p>
-      <div class="api-demo">
-        <pre># Submit (returns immediately)
-curl -X POST "$API/api/jobs/capture" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://stripe.com"}'
-
-# Poll
-curl "$API/api/jobs/{job_id}"
-
-# Health / queue stats
-curl "$API/health"
-curl "$API/api/jobs/stats/queue"</pre>
+    <nav>
+      <div class="logo">Luma <span>Builder</span></div>
+      <div class="nav-links">
+        <a href="#showcase">预览</a>
+        <a href="#why-local">为何本地运行</a>
+        <a href="#run">一键运行</a>
+        <a href="#docs">文档</a>
       </div>
-    </div>
+    </nav>
 
-    <div class="card">
-      <h2>Docs</h2>
-      <ul>
-        <li><a class="link" href="https://github.com/AndyUneducated/lumalabs/blob/main/README.md">README</a> — run locally</li>
-        <li><a class="link" href="https://github.com/AndyUneducated/lumalabs/blob/main/APPROACH.md">APPROACH.md</a> — decisions & tradeoffs</li>
-        <li><a class="link" href="https://github.com/AndyUneducated/lumalabs/blob/main/docs/DEPLOY.md">DEPLOY.md</a> — Docker + Render + Pages</li>
-        <li><a class="link" href="https://youtu.be/hoTlBtaU-bI">Video walkthrough</a></li>
-      </ul>
-    </div>
+    <header class="hero">
+      <div class="badge">Agentic · 10 MCP Tools · Fidelity Loop</div>
+      <h1>粘贴 URL，AI 生成可编辑落地页</h1>
+      <p>
+        <code style="color:var(--accent-2);background:rgba(109,94,252,0.1);padding:0.15rem 0.4rem;border-radius:4px;font-size:0.9em">look → build → measure → fix</code>
+        闭环：截图观察、语义 HTML、四轴保真度评分、对话式精修。
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#run">本地一键运行</a>
+        <a class="btn btn-ghost" href="https://youtu.be/hoTlBtaU-bI" target="_blank" rel="noopener">观看演示视频</a>
+      </div>
+      <p class="lang-note">English docs in <a href="https://github.com/AndyUneducated/lumalabs/blob/main/README.md" style="color:var(--accent-2)">README.md</a></p>
+    </header>
+
+    <section class="showcase" id="showcase">
+      <div class="section-head">
+        <h2>产品界面预览</h2>
+        <p>完整动态体验需在本地运行 — 以下为实际工作区界面示意</p>
+      </div>
+      <div class="showcase-grid">
+        <div class="browser">
+          <div class="chrome">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url-bar">localhost:8000</div>
+          </div>
+          <div class="screen">
+            <div class="screen-label">① 粘贴目标 URL</div>
+            <div class="mock-landing">
+              <h3>Website Builder</h3>
+              <p>Paste a URL to clone its design as an editable template</p>
+              <div class="mock-input-row">
+                <div class="mock-input">https://stripe.com</div>
+                <div class="mock-go">Go</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="browser">
+          <div class="chrome">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url-bar">localhost:8000 · Agent working</div>
+          </div>
+          <div class="screen">
+            <div class="screen-label">② 对话式精修</div>
+            <div class="mock-workspace" style="grid-template-columns:1fr;">
+              <div class="mock-chat" style="min-height:180px;">
+                <div class="mock-bubble user">Make the CTA more prominent</div>
+                <div class="mock-bubble ai">Updated hero section — larger button, higher contrast token.</div>
+                <div class="mock-bubble user">Use our brand color #635bff</div>
+                <div class="mock-bubble ai">Applied set_design_token on --accent-primary.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="browser browser-wide">
+          <div class="chrome">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url-bar">localhost:8000 · Preview · Compare · Insights</div>
+          </div>
+          <div class="screen">
+            <div class="screen-label">③ 实时预览 + 保真度对比</div>
+            <div class="mock-tabs">
+              <div class="mock-tab on">Preview</div>
+              <div class="mock-tab">Code</div>
+              <div class="mock-tab">Compare</div>
+              <div class="mock-tab">Insights</div>
+              <div class="mock-tab">History</div>
+            </div>
+            <div class="mock-workspace">
+              <div class="mock-preview">
+                <div class="mock-stripe"></div>
+                <div class="mock-hero"></div>
+                <div class="mock-cards"><div class="mock-card"></div><div class="mock-card"></div><div class="mock-card"></div></div>
+              </div>
+              <div class="mock-chat">
+                <div class="mock-compare">
+                  <div class="mock-pane"><span>Target</span></div>
+                  <div class="mock-pane"><span>Output</span></div>
+                </div>
+                <div class="mock-score">
+                  <span class="mock-pill">content 0.94</span>
+                  <span class="mock-pill">layout 0.88</span>
+                  <span class="mock-pill">visual 0.84</span>
+                  <span class="mock-pill">pass ✓</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="why-local">
+      <div class="section-head">
+        <h2>为什么 GitHub Pages 无法托管完整应用？</h2>
+        <p>本页面是静态落地页；真正的 Builder 是动态全栈服务</p>
+      </div>
+      <div class="why-grid">
+        <div class="why-item">
+          <div class="icon">🖥️</div>
+          <h4>需要 Python 后端</h4>
+          <p>FastAPI 服务处理聊天、SSE 推送、会话状态与 API 路由。GitHub Pages 仅支持静态 HTML/CSS/JS 文件。</p>
+        </div>
+        <div class="why-item">
+          <div class="icon">🎭</div>
+          <h4>需要 Playwright + Chromium</h4>
+          <p>截图、样式提取、保真度对比依赖无头浏览器。静态托管无法运行 Chromium 进程。</p>
+        </div>
+        <div class="why-item">
+          <div class="icon">🤖</div>
+          <h4>需要 Claude Agent SDK</h4>
+          <p>Agent 循环调用 10 个 MCP 工具，需要本地 CLI 或 API Key。这些密钥不能放在公开静态站点中。</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:1.25rem;">
+        <h3>推荐体验方式</h3>
+        <p>评审者 <strong style="color:var(--text)">clone 仓库 → 一键脚本 → 浏览器打开 localhost:8000</strong>，即可体验完整流程：粘贴 URL、观看 Agent 工作、对话精修、查看 Compare / Insights。</p>
+        <p style="margin-top:0.5rem;">可选：自行部署 Docker 到 Render/Fly 获得公网 URL（见 <a href="https://github.com/AndyUneducated/lumalabs/blob/main/docs/DEPLOY.md" style="color:var(--accent-2)">DEPLOY.md</a>）。</p>
+      </div>
+    </section>
+
+    <section id="run">
+      <div class="section-head">
+        <h2>本地一键运行</h2>
+        <p>复制下面任意一条命令，终端执行后即可启动</p>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span>⚡ 一键 clone + 安装 + 启动（推荐）</span>
+          <button class="copy-btn" data-copy="one-liner">复制</button>
+        </div>
+        <pre id="one-liner"><span class="cmd">git clone https://github.com/AndyUneducated/lumalabs.git && cd lumalabs && chmod +x run.sh && ./run.sh</span></pre>
+      </div>
+
+      <div class="code-block" style="margin-top:1rem;">
+        <div class="code-header">
+          <span>已有仓库时，直接启动</span>
+          <button class="copy-btn" data-copy="run-only">复制</button>
+        </div>
+        <pre id="run-only"><span class="cmd">./run.sh</span>  <span class="cmt"># 自动创建 .venv、安装依赖、启动 http://localhost:8000</span></pre>
+      </div>
+
+      <div class="card" style="margin-top:1.5rem;">
+        <h3>分步说明（若一键命令失败）</h3>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>克隆仓库</h4>
+              <p><code>git clone https://github.com/AndyUneducated/lumalabs.git && cd lumalabs</code></p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>环境要求</h4>
+              <table class="req-table">
+                <tr><th>依赖</th><th>版本</th></tr>
+                <tr><td>Python</td><td><code>3.10+</code></td></tr>
+                <tr><td>Git</td><td>任意近期版本</td></tr>
+                <tr><td>Anthropic</td><td><code>.env</code> 中 API Key，或 <code>claude login</code></td></tr>
+                <tr><td>Chromium</td><td><code>run.sh</code> 会自动安装（Playwright）</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>配置 API Key</h4>
+              <p><code>cp .env.example .env</code>，编辑 <code>.env</code> 填入 <code>ANTHROPIC_API_KEY</code>，或使用 Claude Code CLI 登录。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <h4>启动服务</h4>
+              <p><code>chmod +x run.sh && ./run.sh</code> → 浏览器打开 <strong style="color:var(--accent-2)">http://localhost:8000</strong></p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-body">
+              <h4>体验流程</h4>
+              <p>粘贴目标 URL（如 stripe.com）→ 等待 Agent 构建 → 在聊天中精修 → 切换 Preview / Compare / Insights 查看结果。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-body">
+              <h4>验证安装（可选）</h4>
+              <p><code>python scripts/verify_phase7.py</code> — 测试可扩展 job queue API</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="docs">
+      <div class="section-head">
+        <h2>文档与资源</h2>
+      </div>
+      <div class="links-grid">
+        <a class="link-card" href="https://github.com/AndyUneducated/lumalabs/blob/main/README.md" target="_blank" rel="noopener">
+          <strong>README</strong><span>完整功能说明</span>
+        </a>
+        <a class="link-card" href="https://github.com/AndyUneducated/lumalabs/blob/main/APPROACH.md" target="_blank" rel="noopener">
+          <strong>APPROACH</strong><span>架构决策与权衡</span>
+        </a>
+        <a class="link-card" href="https://github.com/AndyUneducated/lumalabs/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">
+          <strong>DEPLOY</strong><span>Docker / Render 部署</span>
+        </a>
+        <a class="link-card" href="https://youtu.be/hoTlBtaU-bI" target="_blank" rel="noopener">
+          <strong>Video</strong><span>5 分钟演示</span>
+        </a>
+        <a class="link-card" href="https://github.com/AndyUneducated/lumalabs" target="_blank" rel="noopener">
+          <strong>GitHub</strong><span>源代码仓库</span>
+        </a>
+      </div>
+    </section>
 
     <footer>
-      Luma take-home submission · GitHub Pages hosts this landing; API runs on Render/Fly/Docker.
+      Luma Take-Home Submission · 本页由 GitHub Pages 托管静态内容 · 完整应用请本地运行
     </footer>
   </div>
+
   <script>
-    // After deploying the API, set this to your public URL (no trailing slash).
-    const API_URL = localStorage.getItem('lumalabs_api') || 'http://localhost:8000';
-    document.getElementById('api-url').textContent = API_URL;
-    document.getElementById('open-app').href = API_URL + '/';
-    document.querySelector('.api-demo pre').textContent =
-      document.querySelector('.api-demo pre').textContent.replaceAll('$API', API_URL);
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.copy;
+        const text = document.getElementById(id).innerText;
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = '已复制 ✓';
+          btn.classList.add('copied');
+          setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+        });
+      });
+    });
   </script>
 </body>
 </html>

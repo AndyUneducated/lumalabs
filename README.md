@@ -90,23 +90,22 @@ python scripts/verify_phase7.py   # job queue + scalable API
 
 ## Getting Started
 
+**One-liner** (clone + install + run):
+
+```bash
+git clone https://github.com/AndyUneducated/lumalabs.git && cd lumalabs && chmod +x run.sh && ./run.sh
+```
+
+Then open http://localhost:8000. Landing page with full local-run guide: https://andyuneducated.github.io/lumalabs/
+
 A scaffold is provided: a server, a live preview, a chat interface, and two tools (`write_html`, `read_html`, plus builtins) wired to the Claude Agent SDK.
 
 ```bash
-# 1. Create your own private repo and push to it
-git init && git add -A && git commit -m "initial"
-gh repo create my-take-home --private --source=. --push
-
-# 2. Install dependencies
+# Manual setup (alternative to run.sh)
 pip install -r requirements.txt
-
-# 3. Set up your API key
-cp .env.example .env
-# Edit .env and add your Anthropic API key
-
-# 4. Start the server
-python server.py
-# Open http://localhost:8000
+python -m playwright install chromium
+cp .env.example .env   # add Anthropic API key or use claude login
+python server.py       # http://localhost:8000
 ```
 
 Paste a URL. See what happens. Then make it better.

@@ -29,11 +29,24 @@ Clients are keyed by `X-API-Key` header, else first `X-Forwarded-For` hop, else 
 
 ## 1. GitHub Pages (landing site)
 
-1. Push `main` to https://github.com/AndyUneducated/lumalabs
-2. Repo **Settings → Pages → Build and deployment**
-   - Source: **GitHub Actions**
-3. The workflow `.github/workflows/pages.yml` deploys `docs/` on every push to `main`
+**Do this once before the workflow can succeed** — otherwise `configure-pages` returns `Not Found`.
+
+1. Open https://github.com/AndyUneducated/lumalabs/settings/pages
+2. Under **Build and deployment → Source**, choose **GitHub Actions** (not “Deploy from a branch”)
+3. Push `main` (or re-run the **Deploy GitHub Pages** workflow under Actions)
 4. Site URL: **https://andyuneducated.github.io/lumalabs/**
+
+The workflow `.github/workflows/pages.yml` uploads `docs/` on every push to `main`.
+
+### Troubleshooting Pages deploy
+
+| Symptom | Fix |
+|---------|-----|
+| `Get Pages site failed … Not Found` | Pages not enabled yet — complete step 2 above, then re-run the workflow |
+| `Node 20 is being deprecated` | Informational only; `configure-pages@v5` runs on Node 24 |
+| Workflow green but 404 on URL | Wait 1–2 min; check Actions → latest deploy job for the `page_url` |
+
+`enablement: true` on `configure-pages` only works with a PAT (not `GITHUB_TOKEN`), so manual enablement in Settings is the reliable path.
 
 ---
 
