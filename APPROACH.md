@@ -141,11 +141,38 @@ These are **product-boundary choices**, not unfinished work.
 
 ---
 
-## 7. What I'd build next
+## 7. Scalable API (shipped)
+
+Heavy capture work is **decoupled from the HTTP request** via an async job queue:
 
 ```mermaid
 flowchart LR
-    NOW[shipped: visual loop · fidelity · tokens · edits · history · A/B] --> N1[public deploy<br/>Docker + screenshot worker]
+    CLIENT[client] --> API[FastAPI stateless]
+    API --> Q[(job queue)]
+    Q --> W1[worker 1]
+    Q --> W2[worker 2]
+    W1 --> PW[Playwright]
+    W2 --> PW
+```
+
+| Endpoint | Role |
+|----------|------|
+| `POST /api/jobs/capture` | Enqueue capture; returns `job_id` immediately |
+| `GET /api/jobs/{id}` | Poll status + result |
+| `GET /api/jobs/stats/queue` | Queue depth, active workers, quota |
+| `GET /health` | Readiness for deploy |
+
+Concurrency capped by `CAPTURE_WORKERS`; per-client quota via `X-API-Key` + `QUOTA_PER_HOUR`. Jobs persist under `data/jobs/`.
+
+Deploy: Docker + `render.yaml`; landing page on GitHub Pages (`docs/`). See [docs/DEPLOY.md](docs/DEPLOY.md).
+
+---
+
+## 8. What I'd build next
+
+```mermaid
+flowchart LR
+    NOW[shipped: visual loop · fidelity · tokens · edits · history · A/B · job API] --> N1[Redis queue + multi-instance]
     N1 --> N2[scale: stateless API + job queue + quotas]
     N2 --> N3[LoRA token-extractor<br/>small model in pipeline]
     N3 --> N4[agentic PR / publish + export]
@@ -153,19 +180,19 @@ flowchart LR
 
 | Next | Payoff |
 |------|--------|
-| Containerized deploy + isolated screenshot worker | Email ask: public URL + scalable API ([IDEA.md Phase 7](IDEA.md)) |
+| Redis-backed queue + horizontal API replicas | Multi-instance scale beyond single-process queue |
 | Stateless API + job queue + per-key quotas | Concurrency under load |
 | LoRA-tuned token / section parser (Qwen2.5-0.5B) | ML depth; offload a deterministic slice from the LLM |
 | Export / one-click publish | Closes the "URL in → share link out" loop |
 
 ---
 
-## 8. How to verify
+## 9. How to verify
 
 ```bash
 pip install -r requirements.txt && python -m playwright install chromium
 python server.py            # http://localhost:8000
-python scripts/verify_phase2.py   # …phase3–6: fidelity, tokens, history, convergence
+python scripts/verify_phase2.py   # …phase3–7: fidelity, tokens, history, convergence, job queue
 ```
 
 All phase checks pass; see [`README.md`](README.md) for the full run + verify matrix.

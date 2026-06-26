@@ -60,7 +60,7 @@ flowchart LR
 | `prompts.py` | Profile-aware system prompts |
 | `tools/` | MCP tool implementations + schema generation |
 | `compare/` | Pure-Python fidelity scoring (no Playwright) |
-| `browser.py` · `assets.py` · `tokens.py` · `sections.py` · `history.py` · `convergence.py` | Capture, asset mirror, tokens, edits, snapshots, A/B |
+| `browser.py` · `assets.py` · `tokens.py` · `sections.py` · `history.py` · `convergence.py` · `job_queue.py` | Capture, assets, tokens, edits, snapshots, A/B, async job queue |
 
 ### Run & verify
 
@@ -76,9 +76,15 @@ python scripts/verify_phase3.py   # design tokens
 python scripts/verify_phase4.py   # section edits
 python scripts/verify_phase5.py   # history / rollback / errors
 python scripts/verify_phase6.py   # convergence + A/B
+python scripts/verify_phase7.py   # job queue + scalable API
 ```
 
 **Recommended model**: `AGENT_MODEL=opus` for the closest visual copy; `haiku` (default) for cheap iteration ([ADR 0002](docs/ADR.md#adr-0002)).
+
+### Deploy
+
+- **GitHub Pages** (landing): `docs/` → https://andyuneducated.github.io/lumalabs/ — see [docs/DEPLOY.md](docs/DEPLOY.md)
+- **Docker / Render** (live API): `docker compose up` or `render.yaml` — `GET /health`, `POST /api/jobs/capture`
 
 ---
 

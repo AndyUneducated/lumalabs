@@ -1,0 +1,362 @@
+{
+  "20f04d13-a6e9-4e92-b184-ccfa1429cf35": {
+    "runs": [
+      {
+        "session_id": "20f04d13-a6e9-4e92-b184-ccfa1429cf35",
+        "url": "https://stripe.com",
+        "profile": "more_faithful",
+        "started": "2026-06-26T07:46:47+00:00",
+        "rounds": [
+          {
+            "round": 1,
+            "ts": "2026-06-26T07:49:50+00:00",
+            "total": 0.2874,
+            "verdict": "fail",
+            "axes": {
+              "content": 0.6214,
+              "structure": 0.2848,
+              "layout": 0.0232,
+              "visual": 0.4896,
+              "assets": 0.0
+            },
+            "worst": [
+              "nav#navigation-menu",
+              "main#main-content",
+              "section",
+              "section",
+              "section",
+              "section"
+            ],
+            "worst_detail": [
+              {
+                "section": "nav#navigation-menu",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.00"
+              },
+              {
+                "section": "main#main-content",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.00"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.30"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.31"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.33"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.43"
+              }
+            ],
+            "gate_failures": [
+              "content: text coverage 0.55 < 0.95",
+              "layout: header IoU 0.3496 < 0.35",
+              "assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)"
+            ],
+            "reasons": [
+              "Hard gate failed: content: text coverage 0.55 < 0.95",
+              "Hard gate failed: layout: header IoU 0.3496 < 0.35",
+              "Hard gate failed: assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.00",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.00",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.30",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.31",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.33",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.43"
+            ]
+          },
+          {
+            "round": 2,
+            "ts": "2026-06-26T07:50:43+00:00",
+            "total": 0.301,
+            "verdict": "fail",
+            "axes": {
+              "content": 0.6559,
+              "structure": 0.2444,
+              "layout": 0.017,
+              "visual": 0.5158,
+              "assets": 0.0
+            },
+            "worst": [
+              "nav#navigation-menu",
+              "main#main-content",
+              "section",
+              "section",
+              "section",
+              "section"
+            ],
+            "worst_detail": [
+              {
+                "section": "nav#navigation-menu",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.00"
+              },
+              {
+                "section": "main#main-content",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.00"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.17"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.04"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.32"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.33"
+              }
+            ],
+            "gate_failures": [
+              "content: text coverage 0.625 < 0.95",
+              "layout: nav#navigation-menu IoU 0.0 < 0.35",
+              "assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)"
+            ],
+            "reasons": [
+              "Hard gate failed: content: text coverage 0.625 < 0.95",
+              "Hard gate failed: layout: nav#navigation-menu IoU 0.0 < 0.35",
+              "Hard gate failed: assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.00",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.00",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.17",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.04",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.32",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.33"
+            ]
+          },
+          {
+            "round": 3,
+            "ts": "2026-06-26T07:52:50+00:00",
+            "total": 0.3298,
+            "verdict": "fail",
+            "axes": {
+              "content": 0.6559,
+              "structure": 0.321,
+              "layout": 0.11,
+              "visual": 0.5245,
+              "assets": 0.0
+            },
+            "worst": [
+              "section",
+              "section",
+              "section",
+              "section",
+              "header",
+              "section"
+            ],
+            "worst_detail": [
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.01"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.26"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.26"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.36"
+              },
+              {
+                "section": "header",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.00"
+              },
+              {
+                "section": "section",
+                "axis": "layout",
+                "detail": "IoU 0.00, vertical offset 0.36"
+              }
+            ],
+            "gate_failures": [
+              "content: text coverage 0.625 < 0.95",
+              "layout: nav#navigation-menu IoU 0.3282 < 0.35",
+              "assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)"
+            ],
+            "reasons": [
+              "Hard gate failed: content: text coverage 0.625 < 0.95",
+              "Hard gate failed: layout: nav#navigation-menu IoU 0.3282 < 0.35",
+              "Hard gate failed: assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.01",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.26",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.26",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.36",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.00",
+              "Priority fix (layout): IoU 0.00, vertical offset 0.36"
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "ts": "2026-06-26T07:46:56+00:00",
+            "tool": "capture_site",
+            "args": "url=https://stripe.com",
+            "after_round": 0,
+            "agent_said": "I'll start by capturing the Stripe site and extracting its design tokens."
+          },
+          {
+            "ts": "2026-06-26T07:46:56+00:00",
+            "tool": "extract_design_tokens",
+            "args": "url=https://stripe.com",
+            "after_round": 0,
+            "agent_said": "I'll start by capturing the Stripe site and extracting its design tokens."
+          },
+          {
+            "ts": "2026-06-26T07:47:21+00:00",
+            "tool": "extract_assets",
+            "args": "url=https://stripe.com",
+            "after_round": 0,
+            "agent_said": "Now let me extract the real assets (logo, hero gradient, customer logos) for a faithful match."
+          },
+          {
+            "ts": "2026-06-26T07:47:39+00:00",
+            "tool": "DesignSync",
+            "args": "",
+            "after_round": 0,
+            "agent_said": "Let me query the manifest with jq to get the key asset paths without loading the whole file."
+          },
+          {
+            "ts": "2026-06-26T07:49:36+00:00",
+            "tool": "write_html",
+            "args": "",
+            "after_round": 0,
+            "agent_said": "The asset manifest is too large to load and I don't have file-read access to it here, so I'll recreate Stripe's signature visuals (the flowing gradient hero, dark stats band, two-tone headings) faithfully with CSS gradients and the extracted design tokens. Let me build the template."
+          },
+          {
+            "ts": "2026-06-26T07:49:45+00:00",
+            "tool": "compare_to_target",
+            "args": "url=https://stripe.com",
+            "after_round": 0,
+            "agent_said": "Now let me run the fidelity check against the target."
+          },
+          {
+            "ts": "2026-06-26T07:50:33+00:00",
+            "tool": "edit_section",
+            "args": "selector=hero",
+            "after_round": 1,
+            "agent_said": "The verdict is `fail`, driven mainly by the **assets** gate (the mirrored asset manifest was too large for me to read in this environment, so I can't wire in Stripe's actual logo/hero files), plus **content coverage** (missing some payment-detail text) and a borderline **header** layout score. Let me fix what I can control \u2014 I'll add the missing content by building Stripe's hero checkout mockup, a"
+          },
+          {
+            "ts": "2026-06-26T07:50:40+00:00",
+            "tool": "compare_to_target",
+            "args": "url=https://stripe.com",
+            "after_round": 1,
+            "agent_said": "The verdict is `fail`, driven mainly by the **assets** gate (the mirrored asset manifest was too large for me to read in this environment, so I can't wire in Stripe's actual logo/hero files), plus **content coverage** (missing some payment-detail text) and a borderline **header** layout score. Let me fix what I can control \u2014 I'll add the missing content by building Stripe's hero checkout mockup, a"
+          },
+          {
+            "ts": "2026-06-26T07:51:12+00:00",
+            "tool": "read_html",
+            "args": "",
+            "after_round": 2,
+            "agent_said": "Total nudged up (content 0.55\u21920.625, visual 0.58\u21920.60). Two blockers remain that I should be candid about: the **assets** gate (0.0) requires wiring in Stripe's mirrored logo/hero/favicon files, but the asset manifest exceeded readable size in this environment, so I can't retrieve those local paths; and **layout** is penalized because Stripe's real page has ~20 tall lazy-loaded sections. Per escal"
+          },
+          {
+            "ts": "2026-06-26T07:52:39+00:00",
+            "tool": "write_html",
+            "args": "",
+            "after_round": 2,
+            "agent_said": "I'll do a full rewrite adding `nav`/`main` landmarks, a customer-story carousel (recovering missing content like URBN/Instacart and the stat figures), and a favicon link, plus fix a malformed footer link."
+          },
+          {
+            "ts": "2026-06-26T07:52:47+00:00",
+            "tool": "compare_to_target",
+            "args": "url=https://stripe.com",
+            "after_round": 2,
+            "agent_said": "I'll do a full rewrite adding `nav`/`main` landmarks, a customer-story carousel (recovering missing content like URBN/Instacart and the stat figures), and a favicon link, plus fix a malformed footer link."
+          }
+        ],
+        "ended": "2026-06-26T07:53:22+00:00"
+      }
+    ],
+    "baseline": {
+      "total": 0.2621,
+      "verdict": "fail",
+      "axes": {
+        "content": 0.6319,
+        "structure": 0.3056,
+        "layout": 0.0141,
+        "visual": 0.4118,
+        "assets": 0.0
+      },
+      "url": "https://stripe.com",
+      "ts": "2026-06-26T08:07:49+00:00",
+      "gate_failures": [
+        "content: text coverage 0.5625 < 0.95",
+        "layout: header IoU 0.2969 < 0.35",
+        "assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)"
+      ],
+      "worst_detail": [
+        {
+          "section": "nav#navigation-menu",
+          "axis": "layout",
+          "detail": "IoU 0.00, vertical offset 0.01"
+        },
+        {
+          "section": "main#main-content",
+          "axis": "layout",
+          "detail": "IoU 0.00, vertical offset 0.00"
+        },
+        {
+          "section": "section",
+          "axis": "layout",
+          "detail": "IoU 0.00, vertical offset 0.31"
+        },
+        {
+          "section": "section",
+          "axis": "layout",
+          "detail": "IoU 0.00, vertical offset 0.34"
+        },
+        {
+          "section": "section",
+          "axis": "layout",
+          "detail": "IoU 0.00, vertical offset 0.40"
+        },
+        {
+          "section": "section",
+          "axis": "layout",
+          "detail": "IoU 0.00, vertical offset 0.46"
+        }
+      ],
+      "reasons": [
+        "Hard gate failed: content: text coverage 0.5625 < 0.95",
+        "Hard gate failed: layout: header IoU 0.2969 < 0.35",
+        "Hard gate failed: assets: coverage 0.0 < 0.75 (missing: favicon, logo, hero)",
+        "Priority fix (layout): IoU 0.00, vertical offset 0.01",
+        "Priority fix (layout): IoU 0.00, vertical offset 0.00",
+        "Priority fix (layout): IoU 0.00, vertical offset 0.31",
+        "Priority fix (layout): IoU 0.00, vertical offset 0.34",
+        "Priority fix (layout): IoU 0.00, vertical offset 0.40",
+        "Priority fix (layout): IoU 0.00, vertical offset 0.46"
+      ]
+    }
+  }
+}

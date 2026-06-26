@@ -7,7 +7,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
-from builder_config import AGENT_MODEL, OUTPUT_FILE
+from builder_config import AGENT_MODEL, OUTPUT_FILE, use_cli_oauth_auth
 from prompts import NAKED_SYSTEM_PROMPT, build_system_prompt
 
 
@@ -56,7 +56,7 @@ def _build_agent_options(
 
     import server_state as st
 
-    os.environ.pop("CLAUDECODE", None)
+    use_cli_oauth_auth()
 
     cs = create_tool_server()
     names = tool_subset if tool_subset is not None else TOOL_NAMES
@@ -102,7 +102,7 @@ async def run_naked_baseline(url: str, profile: str) -> dict:
     prior_html = OUTPUT_FILE.read_text() if OUTPUT_FILE.is_file() else None
 
     async with st.agent_lock:
-        os.environ.pop("CLAUDECODE", None)
+        use_cli_oauth_auth()
         opts = _build_agent_options(
             tool_subset=["capture_site", "write_html"],
             system_prompt=NAKED_SYSTEM_PROMPT,
@@ -150,7 +150,7 @@ async def run_agent_turn(
 
     prof = set_fidelity_profile(fidelity_profile)
     convergence.begin_run(url, prof, session_id=session_id)
-    os.environ.pop("CLAUDECODE", None)
+    use_cli_oauth_auth()
 
     def _on_stderr(line: str) -> None:
         if stderr_lines is not None:

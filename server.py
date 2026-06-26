@@ -12,23 +12,27 @@ import shutil
 import sys
 from pathlib import Path
 
-os.environ.pop("CLAUDECODE", None)
-
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from builder_config import AGENT_MODEL, OUTPUT_DIR
+from builder_config import AGENT_MODEL, OUTPUT_DIR, use_cli_oauth_auth
+
+use_cli_oauth_auth()
 from fastapi import FastAPI
 from routes.agent_route import router as agent_router
 from routes.compare_post import router as compare_router
+from routes.health import router as health_router
 from routes.history_route import router as history_router
 from routes.insights import router as insights_router
+from routes.jobs_route import router as jobs_router
 from routes.site import router as site_router
 from routes.sse import router as sse_router
 from routes.tokens_route import router as tokens_router
+import job_queue
+import worker_handlers
 
 import server_state
 
@@ -53,6 +57,7 @@ def _detect_claude_transport() -> str:
 def _startup_selfcheck() -> None:
     env_file = Path(".env")
     print("[startup] AGENT_MODEL:", AGENT_MODEL, file=sys.stderr)
+    print("[startup] auth: Claude Code CLI (OAuth login)", file=sys.stderr)
     print("[startup] transport:", _detect_claude_transport(), file=sys.stderr)
     print(
         "[startup] .env file:",
@@ -79,8 +84,11 @@ async def lifespan(app: FastAPI):
 
     set_notify_fn(server_state.notify)
     server_state.load_sessions()
+    job_queue.register_handler("capture", worker_handlers.handle_capture)
+    await job_queue.start_workers()
     _startup_selfcheck()
     yield
+    await job_queue.stop_workers()
     from browser import close_browser
 
     await close_browser()
@@ -88,12 +96,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Website Builder", lifespan=lifespan)
 
+app.include_router(health_router)
 app.include_router(site_router)
 app.include_router(sse_router)
 app.include_router(compare_router)
 app.include_router(insights_router)
 app.include_router(history_router)
 app.include_router(tokens_router)
+app.include_router(jobs_router)
 app.include_router(agent_router)
 
 
@@ -103,7 +113,9 @@ if __name__ == "__main__":
     import uvicorn
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
+    from builder_config import PORT
+
+    parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()
 
     print(f"\nWebsite builder running on http://localhost:{args.port}\n")

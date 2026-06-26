@@ -9,3 +9,4 @@ build/
 .DS_Store
 output/
 data/.session_id
+data/jobs/

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luma Take-Home — Agentic Website Builder</title>
+  <meta name="description" content="Paste a URL, get a near-pixel landing page template, refine in chat." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --card: #14141c;
+      --text: #f4f4f8;
+      --muted: #9b9bb0;
+      --accent: #635bff;
+      --accent-hover: #7a73ff;
+      --border: #2a2a38;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    h1 { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.75rem; }
+    .lead { color: var(--muted); font-size: 1.125rem; margin-bottom: 2rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .card p, .card li { color: var(--muted); font-size: 0.95rem; }
+    .card ul { margin: 0.5rem 0 0 1.25rem; }
+    a.btn {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.65rem 1.25rem;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    a.btn:hover { background: var(--accent-hover); }
+    a.link { color: var(--accent-hover); }
+    code {
+      background: #1e1e2a;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    .api-demo { margin-top: 1rem; }
+    .api-demo pre {
+      background: #0e0e14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.8rem;
+      color: #c8c8d8;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Agentic Website Builder</h1>
+    <p class="lead">
+      Paste a marketing URL → AI agent builds a clean, editable template → refine in chat.
+      <code>look → build → measure → fix</code> loop with 10 MCP tools.
+    </p>
+
+    <div class="card">
+      <h2>Live app</h2>
+      <p>
+        The full app (FastAPI + Playwright + Claude agent) runs on a compute host — not static Pages.
+        Set <code id="api-url">API_URL</code> below after you deploy the Docker image.
+      </p>
+      <a class="btn" id="open-app" href="#">Open builder</a>
+    </div>
+
+    <div class="card">
+      <h2>Scalable capture API</h2>
+      <p>Heavy screenshot work is queued behind a worker pool with per-key quotas.</p>
+      <div class="api-demo">
+        <pre># Submit (returns immediately)
+curl -X POST "$API/api/jobs/capture" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://stripe.com"}'
+
+# Poll
+curl "$API/api/jobs/{job_id}"
+
+# Health / queue stats
+curl "$API/health"
+curl "$API/api/jobs/stats/queue"</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Docs</h2>
+      <ul>
+        <li><a class="link" href="https://github.com/AndyUneducated/lumalabs/blob/main/README.md">README</a> — run locally</li>
+        <li><a class="link" href="https://github.com/AndyUneducated/lumalabs/blob/main/APPROACH.md">APPROACH.md</a> — decisions & tradeoffs</li>
+        <li><a class="link" href="https://github.com/AndyUneducated/lumalabs/blob/main/docs/DEPLOY.md">DEPLOY.md</a> — Docker + Render + Pages</li>
+        <li><a class="link" href="https://youtu.be/hoTlBtaU-bI">Video walkthrough</a></li>
+      </ul>
+    </div>
+
+    <footer>
+      Luma take-home submission · GitHub Pages hosts this landing; API runs on Render/Fly/Docker.
+    </footer>
+  </div>
+  <script>
+    // After deploying the API, set this to your public URL (no trailing slash).
+    const API_URL = localStorage.getItem('lumalabs_api') || 'http://localhost:8000';
+    document.getElementById('api-url').textContent = API_URL;
+    document.getElementById('open-app').href = API_URL + '/';
+    document.querySelector('.api-demo pre').textContent =
+      document.querySelector('.api-demo pre').textContent.replaceAll('$API', API_URL);
+  </script>
+</body>
+</html>

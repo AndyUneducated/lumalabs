@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: lumalabs-builder
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: AGENT_MODEL
+        value: haiku
+      - key: CAPTURE_WORKERS
+        value: "2"
+      - key: QUOTA_PER_HOUR
+        value: "30"
+      - key: PORT
+        value: "8000"
+      - key: APP_VERSION
+        value: "1.0.0"
+    # Add ANTHROPIC_API_KEY or configure Claude CLI in the image for agent runs

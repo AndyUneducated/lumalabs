@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CAPTURE_WORKERS=2
+      - QUOTA_PER_HOUR=30
+    volumes:
+      - ./output:/app/output
+      - ./data:/app/data
